@@ -1,0 +1,2589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deck Check</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--border:#334155;--accent:#3b82f6;--accent-hover:#2563eb;--green:#22c55e;--green-bg:rgba(34,197,94,.12);--red:#ef4444;--red-bg:rgba(239,68,68,.12);--yellow:#eab308;--yellow-bg:rgba(234,179,8,.12);--gray:#64748b;--gray-bg:rgba(100,116,139,.12);--blue:#38bdf8;--blue-bg:rgba(56,189,248,.12);--text:#e2e8f0;--muted:#94a3b8;--dim:#475569;--white:#f8fafc;--mono:'JetBrains Mono','SF Mono','Fira Code',Consolas,monospace;--sans:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding:32px 24px}
+.container{max-width:1200px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px}
+.label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-family:var(--sans)}
+input,select,textarea{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;width:100%;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--accent)}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:background .15s,transform .1s;white-space:nowrap}
+.btn:hover{background:var(--accent-hover)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-small{background:var(--border);color:var(--text);border:none;border-radius:5px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans)}.btn-small:hover{background:var(--dim)}
+.btn-danger{background:transparent;border:1px solid var(--border)}.btn-danger:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:16px}
+.header h1{font-family:var(--mono);font-size:22px;font-weight:800;color:var(--white);letter-spacing:-.02em}
+.header .subtitle{color:var(--dim);font-size:13px;margin-top:4px;font-family:var(--mono)}
+.upload-zone{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+@media(max-width:600px){.upload-zone{grid-template-columns:1fr}}
+.upload-box{border:2px dashed var(--border);border-radius:10px;background:var(--card);padding:28px 24px;text-align:center;cursor:pointer;transition:border-color .2s}
+.upload-box:hover{border-color:var(--dim)}.upload-box.loaded{border-color:var(--accent);border-style:solid}
+.upload-box .upload-icon{font-size:28px;margin-bottom:10px;opacity:.5}.upload-box.loaded .upload-icon{opacity:1}
+.upload-box .upload-title{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--muted);margin-bottom:4px}.upload-box.loaded .upload-title{color:var(--accent)}
+.upload-box .upload-sub{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.upload-box .upload-file-name{font-family:var(--mono);font-size:12px;color:var(--green);margin-top:8px;word-break:break-all}
+.stats-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:20px}@media(max-width:900px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;border-left-width:3px}
+.stat-box .stat-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:4px;font-family:var(--sans)}
+.stat-box .stat-value{font-size:28px;font-weight:800;font-family:var(--mono);line-height:1}
+.table-wrapper{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.table-header{padding:12px 18px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}.table-header:hover{background:rgba(255,255,255,.02)}
+.table-header .table-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-family:var(--sans)}.table-header .arrow{color:var(--muted);font-size:14px}
+.results-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.results-table thead th{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);font-family:var(--sans);white-space:nowrap;position:sticky;top:0;background:var(--card)}
+.results-table td{padding:6px 12px;border-bottom:1px solid rgba(51,65,85,.3)}
+.cell-label{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cell-bold{color:var(--white);font-weight:700}
+.status-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em}
+.conf-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.05em;margin-left:4px}
+.hidden{display:none!important}
+.scan-progress{font-family:var(--mono);font-size:12px;color:var(--muted);padding:8px 0}
+.scan-progress .prog-bar{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.scan-progress .prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+.mb-20{margin-bottom:20px}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.toast{position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 20px;font-family:var(--mono);font-size:13px;color:var(--text);z-index:9999;animation:toastIn .3s ease,toastOut .3s ease 3s forwards;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;align-items:center;gap:8px}
+.toast.match{border-color:var(--green)}.toast.error{border-color:var(--red)}.toast.rounding{border-color:var(--yellow)}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0}}
+.config-row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+.config-row .form-group{display:flex;flex-direction:column;gap:4px}
+.config-row input[type=number]{width:70px}
+.log-area{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-family:var(--mono);font-size:11px;color:var(--dim);max-height:200px;overflow-y:auto;white-space:pre-wrap;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header"><div><h1>Deck Check</h1><div class="subtitle">Upload Excel banners + PPT deck → auto-verify every number</div></div><div style="display:flex;gap:8px"><button id="exportBtn" class="btn-small hidden" onclick="exportReport()">📋 Export Report</button><button id="clearBtn" class="btn-small btn-danger hidden" onclick="clearResults()">Clear</button></div></div>
+
+  <div class="upload-zone">
+    <div class="upload-box" id="bannerBox" onclick="document.getElementById('fileInput').click()"><div class="upload-icon">📊</div><div class="upload-title">Excel Banner File</div><div class="upload-sub">.xlsx or .xls</div><div class="upload-file-name" id="bannerFileName"></div><input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFile(event)"></div>
+    <div class="upload-box" id="banner2Box" onclick="document.getElementById('file2Input').click()" style="border-style:dashed;opacity:0.7"><div class="upload-icon">📊</div><div class="upload-title">2nd Banner (Optional)</div><div class="upload-sub">.xlsx or .xls</div><div class="upload-file-name" id="banner2FileName"></div><input type="file" id="file2Input" accept=".xlsx,.xls" style="display:none" onchange="handleFile2(event)"></div>
+    <div class="upload-box" id="deckBox" onclick="document.getElementById('deckInput').click()"><div class="upload-icon">📑</div><div class="upload-title">PowerPoint Deck</div><div class="upload-sub">.pptx</div><div class="upload-file-name" id="deckFileName"></div><input type="file" id="deckInput" accept=".pptx,.ppt,application/vnd.openxmlformats-officedocument.presentationml.presentation" style="display:none" onchange="handleDeck(event)"></div>
+  </div>
+
+  <div id="configPanel" class="card mb-20 hidden">
+    <div class="label" style="margin-bottom:12px">Configuration</div>
+    <div class="config-row">
+      <div class="form-group"><div class="label">Header Rows</div><input type="number" id="headerRowCount" value="4" min="1" max="10" title="Number of header rows in the Excel sheets (above the data)"></div>
+      <div class="form-group"><div class="label">Overall % Col</div><input type="number" id="overallCol" value="5" min="1" title="Column number containing the Overall % in Excel"></div>
+      <div class="form-group"><div class="label">Code Col</div><input type="number" id="codeCol" value="1" min="1" title="Column with row type codes (2=N, 3=%)"></div>
+      <div class="form-group"><div class="label">Label Col</div><input type="number" id="labelCol" value="2" min="1" title="Column with row labels"></div>
+      <div class="form-group" style="flex:1"><div class="label">Slide Range (blank = all)</div><div style="display:flex;gap:6px"><input type="number" id="slideFrom" placeholder="From" style="width:70px"><span style="color:var(--dim);align-self:center">–</span><input type="number" id="slideTo" placeholder="To" style="width:70px"></div></div>
+      <button class="btn" id="scanBtn" onclick="runFullScan()" disabled>⚡ Scan Deck vs Banners</button>
+    </div>
+    <div id="scanProgress" class="scan-progress hidden"><span id="scanStatus">Scanning...</span><div class="prog-bar"><div class="prog-fill" id="scanFill" style="width:0%"></div></div></div>
+    <div id="scanLog" class="log-area hidden"></div>
+  </div>
+
+  <div id="resultsDashboard" class="hidden">
+    <div class="stats-grid" id="statsGrid"></div>
+    <div id="errorsTableWrapper"></div>
+    <div id="roundingTableWrapper"></div>
+    <div id="notFoundTableWrapper"></div>
+    <div id="skippedTableWrapper"></div>
+    <div id="allChecksTableWrapper"></div>
+  </div>
+
+  <div id="aliasPanel" class="card mb-20 hidden" style="border:1px solid #334155">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="label" style="margin:0">🔧 Match Helper</div>
+        <span id="learnedBadge" onclick="showLearnedAliases()" style="display:none;background:#1e3a5f;color:#60a5fa;padding:2px 8px;border-radius:10px;font-size:10px;cursor:pointer"></span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-small" onclick="addAlias('label')">+ Label Match</button>
+        <button class="btn-small" onclick="addAlias('column')">+ Column Match</button>
+        <button class="btn-small" onclick="addAlias('skip')">+ Skip Label</button>
+        <button class="btn-small" onclick="clearLearnedAliases()" style="color:var(--red)">Clear Learned</button>
+        <button class="btn" onclick="rerunWithAliases()" style="padding:6px 16px">🔄 Re-check</button>
+      </div>
+    </div>
+    <div style="color:var(--dim);font-size:11px;margin-bottom:10px">
+      <b>Label Match:</b> Identify what a PPT label is called in the banners (e.g. "Case-by-case" → "case-by-case basis").<br>
+      <b>Column Match:</b> Identify what a PPT column is called in the banners (e.g. "Support" → "Supprt").<br>
+      <b>Skip:</b> Exclude a label from checking (e.g. "Net", "Total").
+    </div>
+    <div id="aliasRows"></div>
+  </div>
+</div>
+
+<script>
+var workbook=null, sheetNames=[], sheetsData={}, sheetQuestionText={}, sheetQuestionNum={}, deckSlides=[], results=[], skippedItems=[], excelFileName='', pptFileName='';
+var runHistory=[];
+var workbook2=null, sheetNames2=[], sheetsData2={}, sheetQuestionText2={}, sheetQuestionNum2={}, excelFileName2='';
+var pollingAliases={'supt':'support','sprt':'support','gov':'governor','govt':'government','cong':'congress','pres':'president','dem':'democrat','rep':'republican','gop':'republican','hc':'health care','hlt':'health','econ':'economy','ed':'education','env':'environment','imm':'immigration','infra':'infrastructure','kids':'child','child':'child','overall':'total','total':'overall'};
+
+function esc(s){var e=document.createElement('span');e.textContent=s;return e.innerHTML}
+function log(msg){var el=document.getElementById('scanLog');el.classList.remove('hidden');el.textContent+=msg+'\n';el.scrollTop=el.scrollHeight}
+
+/* ─── FILE HANDLERS ─── */
+function handleFile(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  excelFileName=f.name;
+  document.getElementById('bannerFileName').textContent='✓ '+f.name;
+  document.getElementById('bannerBox').classList.add('loaded');
+  var r=new FileReader();
+  r.onload=function(ev){
+    var d=new Uint8Array(ev.target.result);
+    workbook=XLSX.read(d,{type:'array'});
+    sheetNames=workbook.SheetNames;
+    sheetsData={};
+    sheetQuestionText={};
+    sheetQuestionNum={};
+    sheetNames.forEach(function(n){
+      sheetsData[n]=XLSX.utils.sheet_to_json(workbook.Sheets[n],{header:1,defval:''});
+      // Extract question text and question number from header rows
+      var data=sheetsData[n];
+      var qText='', qNum='';
+      for(var r=0;r<Math.min(6,data.length);r++){
+        var v=String(data[r][1]||'').trim();
+        if(v.length>30) qText+=' '+v;
+        // Extract question number like "Q16.", "Q22.", "Q26."
+        if(!qNum){
+          var qMatch=v.match(/\b(Q\d+)[.\s:]/i);
+          if(qMatch) qNum=qMatch[1].toUpperCase();
+        }
+      }
+      sheetQuestionText[n]=qText.toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim();
+      sheetQuestionNum[n]=qNum;
+    });
+    document.getElementById('configPanel').classList.remove('hidden');
+    checkReady();
+  };
+  r.readAsArrayBuffer(f);
+}
+
+function handleFile2(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  excelFileName2=f.name;
+  document.getElementById('banner2FileName').textContent='✓ '+f.name;
+  document.getElementById('banner2Box').classList.add('loaded');
+  document.getElementById('banner2Box').style.opacity='1';
+  document.getElementById('banner2Box').style.borderStyle='solid';
+  var r=new FileReader();
+  r.onload=function(ev){
+    var d=new Uint8Array(ev.target.result);
+    workbook2=XLSX.read(d,{type:'array'});
+    sheetNames2=workbook2.SheetNames;
+    sheetsData2={};
+    sheetQuestionText2={};
+    sheetQuestionNum2={};
+    sheetNames2.forEach(function(n){
+      sheetsData2[n]=XLSX.utils.sheet_to_json(workbook2.Sheets[n],{header:1,defval:''});
+      var data=sheetsData2[n];
+      var qText='', qNum='';
+      for(var r=0;r<Math.min(6,data.length);r++){
+        var v=String(data[r][1]||'').trim();
+        if(v.length>30) qText+=' '+v;
+        if(!qNum){
+          var qMatch=v.match(/\b(Q\d+)[.\s:]/i);
+          if(qMatch) qNum=qMatch[1].toUpperCase();
+        }
+      }
+      sheetQuestionText2[n]=qText.toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim();
+      sheetQuestionNum2[n]=qNum;
+    });
+    log('Loaded 2nd banner: '+f.name+' ('+sheetNames2.length+' sheets)');
+  };
+  r.readAsArrayBuffer(f);
+}
+
+async function handleDeck(e){
+  var f=e.target.files&&e.target.files[0]; if(!f) return;
+  pptFileName=f.name;
+  document.getElementById('deckFileName').textContent='✓ '+f.name;
+  document.getElementById('deckBox').classList.add('loaded');
+  try {
+    var zip=await JSZip.loadAsync(await f.arrayBuffer());
+    deckSlides=[];
+    var slideFiles=[];
+    zip.forEach(function(p){var m=p.match(/^ppt\/slides\/slide(\d+)\.xml$/);if(m)slideFiles.push({num:+m[1],path:p})});
+    slideFiles.sort(function(a,b){return a.num-b.num});
+
+    var nsA='http://schemas.openxmlformats.org/drawingml/2006/main';
+    var nsP='http://schemas.openxmlformats.org/presentationml/2006/main';
+    var nsC='http://schemas.openxmlformats.org/drawingml/2006/chart';
+
+    var slideCharts={};
+    for(var i=0;i<slideFiles.length;i++){
+      var relPath='ppt/slides/_rels/slide'+slideFiles[i].num+'.xml.rels';
+      var relFile=zip.file(relPath); if(!relFile) continue;
+      var relXml=await relFile.async('text');
+      var relDoc=new DOMParser().parseFromString(relXml,'application/xml');
+      var rels=relDoc.getElementsByTagName('Relationship');
+      for(var ri=0;ri<rels.length;ri++){
+        var target=rels[ri].getAttribute('Target')||'';
+        if(target.indexOf('../charts/')===0){
+          var cp='ppt/charts/'+target.replace('../charts/','');
+          if(!slideCharts[slideFiles[i].num]) slideCharts[slideFiles[i].num]=[];
+          slideCharts[slideFiles[i].num].push(cp);
+        }
+      }
+    }
+
+    for(var i=0;i<slideFiles.length;i++){
+      var xml=await zip.file(slideFiles[i].path).async('text');
+      var doc=new DOMParser().parseFromString(xml,'application/xml');
+
+      var textShapes=[];
+      var spNodes=doc.getElementsByTagNameNS(nsP,'sp');
+      for(var si=0;si<spNodes.length;si++){
+        var sp=spNodes[si];
+        var offEl=sp.getElementsByTagNameNS(nsA,'off');
+        var y=0, x=0;
+        if(offEl.length){y=parseInt(offEl[0].getAttribute('y'))||0; x=parseInt(offEl[0].getAttribute('x'))||0}
+        var tEls=sp.getElementsByTagNameNS(nsA,'t');
+        var txt='';
+        for(var ti=0;ti<tEls.length;ti++){txt+=(tEls[ti].textContent||'')}
+        txt=txt.trim();
+        if(txt) textShapes.push({text:txt, x:x, y:y});
+      }
+
+      var tables=[];
+      var gfNodes=doc.getElementsByTagNameNS(nsP,'graphicFrame');
+      for(var gi=0;gi<gfNodes.length;gi++){
+        var gf=gfNodes[gi];
+        var offEl=gf.getElementsByTagNameNS(nsA,'off');
+        var tblY=0, tblX=0;
+        if(offEl.length){tblY=parseInt(offEl[0].getAttribute('y'))||0; tblX=parseInt(offEl[0].getAttribute('x'))||0}
+        var tblEl=gf.getElementsByTagNameNS(nsA,'tbl');
+        if(!tblEl.length) continue;
+        var tbl=tblEl[0];
+        var trNodes=tbl.childNodes;
+        var tblRows=[];
+        var rowHeights=[];
+        for(var tri=0;tri<trNodes.length;tri++){
+          if(trNodes[tri].localName!=='tr') continue;
+          var h=parseInt(trNodes[tri].getAttribute('h'))||0;
+          rowHeights.push(h);
+          var cells=[];
+          var tcList=trNodes[tri].childNodes;
+          for(var tci=0;tci<tcList.length;tci++){
+            if(tcList[tci].localName!=='tc') continue;
+            var cellTs=tcList[tci].getElementsByTagNameNS(nsA,'t');
+            var cv='';
+            for(var ct=0;ct<cellTs.length;ct++){cv+=(cellTs[ct].textContent||'')}
+            cells.push(cv.trim());
+          }
+          if(cells.length) tblRows.push(cells);
+        }
+        if(tblRows.length>0) tables.push({rows:tblRows, x:tblX, y:tblY, rowHeights:rowHeights});
+      }
+
+      var chartData=[];
+      var charts=slideCharts[slideFiles[i].num]||[];
+      for(var ci=0;ci<charts.length;ci++){
+        var cf=zip.file(charts[ci]); if(!cf) continue;
+        var cXml=await cf.async('text');
+        var cDoc=new DOMParser().parseFromString(cXml,'application/xml');
+        var catNodes=cDoc.getElementsByTagNameNS(nsC,'cat');
+        var catLabels=[];
+        for(var cn=0;cn<catNodes.length;cn++){
+          var pts=catNodes[cn].getElementsByTagNameNS(nsC,'pt');
+          for(var pt=0;pt<pts.length;pt++){
+            var vEl=pts[pt].getElementsByTagNameNS(nsC,'v');
+            if(vEl.length) catLabels.push((vEl[0].textContent||'').trim());
+          }
+        }
+        var serNodes=cDoc.getElementsByTagNameNS(nsC,'ser');
+        for(var sn=0;sn<serNodes.length;sn++){
+          var ser=serNodes[sn];
+          var txN=ser.getElementsByTagNameNS(nsC,'tx');
+          var sName='';
+          if(txN.length){var txV=txN[0].getElementsByTagNameNS(nsC,'v');if(txV.length) sName=(txV[0].textContent||'').trim()}
+          var valN=ser.getElementsByTagNameNS(nsC,'val');
+          var vals=[];
+          if(valN.length){var vPts=valN[0].getElementsByTagNameNS(nsC,'pt');
+            for(var vp=0;vp<vPts.length;vp++){var vv=vPts[vp].getElementsByTagNameNS(nsC,'v');if(vv.length){var nv=parseFloat(vv[0].textContent);if(!isNaN(nv))vals.push(nv)}}}
+          chartData.push({seriesName:sName,categories:catLabels.slice(),values:vals});
+        }
+      }
+
+      // Merge split header+data tables: when a 1-row text table sits above
+      // an all-numeric data table at similar X, combine them.
+      var mergedTables=[];
+      var usedAsHeader={};
+      for(var ti2=0;ti2<tables.length;ti2++){
+        if(usedAsHeader[ti2]) continue;
+        var dt=tables[ti2];
+        var isAllNum=dt.rows.length>=2;
+        for(var ri=0;ri<dt.rows.length&&isAllNum;ri++){
+          for(var cc=0;cc<dt.rows[ri].length;cc++){
+            var cv=dt.rows[ri][cc].trim();
+            if(cv&&!/^\s*[+-]?\d+\.?\d*\s*%?\s*$/.test(cv)){isAllNum=false;break}
+          }
+        }
+        if(!isAllNum){mergedTables.push(dt);continue}
+        var bestHdr=-1, bestDist=Infinity;
+        for(var hti=0;hti<tables.length;hti++){
+          if(hti===ti2||usedAsHeader[hti]) continue;
+          var ht=tables[hti];
+          if(ht.rows.length!==1||ht.y>=dt.y) continue;
+          var yDist=dt.y-ht.y, xDist=Math.abs(ht.x-dt.x);
+          if(xDist<500000&&yDist<500000&&yDist<bestDist){
+            var hasText=ht.rows[0].some(function(c){return c.trim()&&!/^\s*\d+%?\s*$/.test(c)});
+            if(hasText){bestHdr=hti;bestDist=yDist}
+          }
+        }
+        if(bestHdr>=0){
+          usedAsHeader[bestHdr]=true;
+          var hr=tables[bestHdr].rows[0].slice();
+          while(hr.length<dt.rows[0].length) hr.push('');
+          var hdrY=tables[bestHdr].y;
+          // Check for group modifier text (like "By Party (Women)") FIRST
+          var groupMod='';
+          var modShapes=textShapes.filter(function(s){
+            return s.y<hdrY && s.y>hdrY-300000 && s.x>=dt.x-500000 && s.x<dt.x+200000 && s.text.length<30;
+          });
+          for(var mi=0;mi<modShapes.length;mi++){
+            var mt=modShapes[mi].text.toLowerCase();
+            if(mt.indexOf('women')!==-1||mt.indexOf('female')!==-1||mt.indexOf('male')!==-1||mt.indexOf('men')!==-1){
+              groupMod=modShapes[mi].text; break;
+            }
+          }
+          // If group modifier found, prefix the header table columns
+          if(groupMod && /women|female/i.test(groupMod)){
+            for(var cc=0;cc<tables[bestHdr].rows[0].length&&cc<hr.length;cc++){
+              if(hr[cc].trim()) hr[cc]='Female '+hr[cc];
+            }
+          }
+          // Fill empty slots from text shapes near the header table Y
+          // EXCLUDE the modifier text shape so it doesn't also become a column
+          var emptySlots=[];
+          for(var cc=0;cc<hr.length;cc++){if(!hr[cc].trim())emptySlots.push(cc)}
+          if(emptySlots.length>0){
+            var aboveShapes=textShapes.filter(function(s){
+              if(s.text===groupMod) return false;  // Skip modifier shape
+              return s.y<hdrY && s.y>hdrY-300000 && s.x>dt.x-200000 && s.text.length<30;
+            }).sort(function(a,b){return a.x-b.x});
+            for(var ei=0;ei<emptySlots.length&&ei<aboveShapes.length;ei++){
+              hr[emptySlots[ei]]=aboveShapes[ei].text;
+            }
+          }
+          // Category label from negative-X text shapes (e.g. "Agree"/"Yes")
+          var catLabel='';
+          var catShapes=textShapes.filter(function(s){
+            return s.x<0 && s.y>dt.y-400000 && s.y<dt.y+400000 && s.text.length<20;
+          }).sort(function(a,b){return a.y-b.y});
+          if(catShapes.length>0) catLabel=catShapes[0].text.trim();
+          // Build merged table with category label as first column
+          var mergedRows=[[''].concat(hr)];
+          for(var ri=0;ri<dt.rows.length;ri++){
+            mergedRows.push([catLabel].concat(dt.rows[ri]));
+          }
+          var mh=[tables[bestHdr].rowHeights[0]||0].concat(dt.rowHeights);
+          mergedTables.push({rows:mergedRows, x:Math.min(dt.x,tables[bestHdr].x), y:tables[bestHdr].y, rowHeights:mh, _merged:true});
+        } else {
+          mergedTables.push(dt);
+        }
+      }
+      tables=mergedTables;
+
+      deckSlides.push({slideNum:slideFiles[i].num, textShapes:textShapes, tables:tables, chartData:chartData});
+    }
+    document.getElementById('configPanel').classList.remove('hidden');
+    checkReady();
+  } catch(err){alert('Failed to parse PPTX: '+err.message)}
+}
+
+function checkReady(){
+  document.getElementById('scanBtn').disabled=!(sheetNames.length>0 && deckSlides.length>0);
+}
+
+/* ─── NORMALIZATION & MATCHING ─── */
+function norm(s){return String(s||'').toLowerCase().replace(/-\s*/g,'').replace(/[\s\u00a0\n\r]+/g,' ').replace(/[^\w\s%$+\/\-]/g,'').replace(/\s*\/\s*/g,'/').trim()}
+function tokenize(s){return norm(s).split(/[\s\/]+/).filter(function(w){return w.length>2})}
+function tokenizeAll(s){return norm(s).split(/[\s\/]+/).filter(function(w){return w.length>0})}
+
+function wordMatch(a,b){
+  if(a===b) return true;
+  if(a.length>=3&&b.indexOf(a)===0) return true;
+  if(b.length>=3&&a.indexOf(b)===0) return true;
+  if(a.length>=4&&b.length>=6&&b.indexOf(a)!==-1) return true;
+  if(b.length>=4&&a.length>=6&&a.indexOf(b)!==-1) return true;
+  return false;
+}
+
+function stripQPrefix(s){
+  return s.replace(/^q\d+[\.\s\-:]+/i,'').trim();
+}
+
+function labelsMatch(pptLabel, excelLabel){
+  var pN=norm(pptLabel), eN=norm(excelLabel);
+  if(!pN||!eN) return false;
+  if(pN===eN) return true;
+  var eStripped=norm(stripQPrefix(excelLabel));
+  if(pN===eStripped) return true;
+
+  // Income range normalization: "$75-100,000" → "75000 100000", "$75,001 to $100,000" → "75001 100000"
+  function normIncome(s){
+    if(!/\$/.test(s)) return '';
+    // Remove $, commas, spaces, "to", and extract just the numbers
+    var clean=s.replace(/[,$]/g,'').replace(/\bto\b/g,' ');
+    var nums=clean.match(/\d+/g);
+    if(!nums||nums.length<1) return '';
+    var result=[];
+    for(var ni=0;ni<nums.length;ni++){
+      result.push(parseInt(nums[ni],10));
+    }
+    // Normalize abbreviated ranges: "$75-100000" means $75,000-$100,000
+    // If first number < 1000 and second >= 10000, multiply first by 1000
+    if(result.length===2 && result[0]<1000 && result[1]>=10000){
+      result[0]=result[0]*1000;
+    }
+    // Round to nearest thousand for comparison (handles 75000 vs 75001)
+    for(var ri=0;ri<result.length;ri++){
+      result[ri]=Math.round(result[ri]/1000)*1000;
+    }
+    return result.sort(function(a,b){return a-b}).join(' ');
+  }
+  var pInc=normIncome(pN), eInc=normIncome(eStripped);
+  if(pInc && eInc && pInc===eInc) return true;
+  // Short label contained in Excel label: "yes" in "vote yes", "no" in "no impact"
+  // But NOT single words matching within long phrases: "star" in "middleton star fire districts"
+  if(pN.length>=2&&pN.length<=4&&eStripped.length>pN.length){
+    var eWords=eStripped.split(/\s+/);
+    if(eWords.length<=2 && eWords.indexOf(pN)!==-1) return true;
+  }
+
+  // Abbreviated PPT label = first word of long Excel label
+  // "Temporary" → "Temporary, with tax increases and funding..."
+  // Also match last word: "Safer" → "Make your community safer"
+  // Also match when PPT word is a key word in a shorter Excel label
+  var pSingleWord=pN.split(/\s+/).length===1 && pN.length>=4;
+  if(pSingleWord){
+    var eFirstWord=eStripped.split(/[\s,]+/)[0];
+    if(eFirstWord===pN) return true;
+    var eWordList=eStripped.split(/\s+/);
+    var eLastWord=eWordList[eWordList.length-1];
+    if(eLastWord===pN) return true;
+    // Also match if the single word appears as a whole word in a reasonably short Excel label
+    // "Okay" in "That's okay because..." or "Worse" in "Made things worse"
+    if(eWordList.indexOf(pN)!==-1 && eWordList.length<=8) return true;
+  }
+
+  // Polling abbreviation aliases: expand before matching
+  var pExpanded=pN, eExpanded=eStripped;
+  var pTokens=pN.split(/\s+/);
+  for(var ti2=0;ti2<pTokens.length;ti2++){
+    if(pollingAliases[pTokens[ti2]]){pTokens[ti2]=pollingAliases[pTokens[ti2]]}
+  }
+  pExpanded=pTokens.join(' ');
+  var eTokens=eStripped.split(/\s+/);
+  for(var ti2=0;ti2<eTokens.length;ti2++){
+    if(pollingAliases[eTokens[ti2]]){eTokens[ti2]=pollingAliases[eTokens[ti2]]}
+  }
+  eExpanded=eTokens.join(' ');
+  if(pExpanded!==pN||eExpanded!==eStripped){
+    if(pExpanded===eExpanded) return true;
+  }
+
+  var dkSet=['dk/refused','dkrefused','dont know/refused','dont knowrefused','not sure','undecided','dont know'];
+  if(dkSet.indexOf(pN)!==-1&&(dkSet.indexOf(eN)!==-1||dkSet.indexOf(eStripped)!==-1)) return true;
+
+  var pWords=pN.split(/\s+/), eWords=eStripped.split(/\s+/);
+  var pShort=pWords.length<=4, eShort=eWords.length<=4;
+  if(pShort&&eShort){
+    var pHasNot=/\bnot\b/.test(pN), eHasNot=/\bnot\b/.test(eStripped);
+    if(pHasNot!==eHasNot) return false;
+  }
+
+  if(pN.length>4&&eStripped.length>4){
+    if(eStripped.indexOf(pN)!==-1&&pN.length/eStripped.length>0.6) return true;
+    if(pN.indexOf(eStripped)!==-1&&eStripped.length/pN.length>0.6) return true;
+  }
+  // Block: single word matching as a word within a very long phrase (too ambiguous)
+  // "Star" should NOT match "Middleton Star Fire Districts" 
+  // But "Safer" CAN match "Make your community safer" (caught above)
+  if(pWords.length===1 && eWords.length>=5) return false;
+
+  // Combined category labels: "Much More/ Somewhat" → try core words vs short Excel labels
+  if(pN.indexOf('/')!==-1){
+    var parts=pN.split(/\s*\/\s*/);
+    var allPartWords=[];
+    for(var pi2=0;pi2<parts.length;pi2++){
+      var ws=parts[pi2].split(/\s+/);
+      for(var wi=0;wi<ws.length;wi++) allPartWords.push(ws[wi]);
+    }
+    var eT=tokenize(excelLabel);
+    if(eT.length<=3){
+      var coreMatches=0;
+      for(var ei2=0;ei2<eT.length;ei2++){
+        for(var ai=0;ai<allPartWords.length;ai++){
+          if(wordMatch(allPartWords[ai],eT[ei2])){coreMatches++;break}
+        }
+      }
+      if(coreMatches>0&&coreMatches>=eT.length*0.5) return true;
+    }
+  }
+
+  // Short PPT label as keyword in long Excel label
+  // GUARD: single-word PPT labels should NOT match multi-word Excel labels
+  // e.g. "Star" should NOT match "Middleton Star Fire Districts"
+  // Only allow this when PPT has 2+ words and ALL appear in Excel label
+  if(pN.length>=4&&eStripped.length>pN.length*1.5){
+    var pKey=tokenize(pptLabel);
+    var eAll=tokenize(excelLabel);
+    // Block single-word PPT matching Excel labels with 3+ words (too ambiguous)
+    if(pKey.length>=2&&eAll.length>=2){
+      // Also try with aliases expanded
+      var pKeyExp=pKey.map(function(w){return pollingAliases[w]||w});
+      if(pKey.every(function(pw){
+        return eAll.some(function(ew){return wordMatch(pw,ew)});
+      })||pKeyExp.every(function(pw){
+        return eAll.some(function(ew){return wordMatch(pw,ew)});
+      })) return true;
+    }
+  }
+
+  // Word overlap (split on spaces AND slashes)
+  var pW=tokenize(pptLabel);
+  var eW=tokenize(excelLabel);
+  if(pW.length===1&&eW.length===1){
+    if(wordMatch(pW[0],eW[0])) return true;
+  }
+  if(pW.length>0&&eW.length>0){
+    var matched=0;
+    for(var pi=0;pi<pW.length;pi++){
+      for(var ei=0;ei<eW.length;ei++){
+        if(wordMatch(pW[pi],eW[ei])){
+          matched++;break;
+        }
+      }
+    }
+    var score=matched/Math.max(pW.length,eW.length);
+    if(matched>=2&&score>=0.5) return true;
+  }
+  return false;
+}
+
+function headerMatch(pptHeader, excelHeader){
+  var pN=norm(pptHeader), eN=norm(excelHeader);
+  if(!pN||!eN) return false;
+  if(pN===eN) return true;
+  var pW=pN.split(/[\s\/]+/).filter(function(w){return w.length>1});
+  var eW=eN.split(/[\s\/]+/).filter(function(w){return w.length>1});
+  if(pW.length>0&&eW.length>0){
+    var matched=0;
+    for(var pi=0;pi<pW.length;pi++){
+      for(var ei=0;ei<eW.length;ei++){
+        if(pW[pi]===eW[ei]||wordMatch(pW[pi],eW[ei])){matched++;break}
+      }
+    }
+    var score=matched/Math.max(pW.length, eW.length);
+    if(score>=0.5) return true;
+  }
+  return false;
+}
+
+function scoreMatch(pN, eN){
+  if(!pN||!eN) return 0;
+  if(pN===eN) return 100;
+  if(pN.replace(/-/g,'')===eN.replace(/-/g,'')) return 95;
+  // Concatenated check: "swcons" === "sw cons" when spaces removed
+  var pNoSpace=pN.replace(/\s+/g,''), eNoSpace=eN.replace(/\s+/g,'');
+  if(pNoSpace===eNoSpace) return 92;
+  var pW=pN.split(/[\s\/]+/).filter(function(w){return w.length>1});
+  var eW=eN.split(/[\s\/]+/).filter(function(w){return w.length>1});
+  var pSingles=pN.split(/[\s\/]+/).filter(function(w){return w.length===1});
+  if(pW.length>0&&eW.length>0){
+    var matched=0;
+    for(var pi=0;pi<pW.length;pi++){
+      for(var ei=0;ei<eW.length;ei++){
+        if(pW[pi]===eW[ei]){matched++;break}
+        else if(pW[pi].length>=2&&eW[ei].indexOf(pW[pi])===0){matched++;break}
+        else if(eW[ei].length>=2&&pW[pi].indexOf(eW[ei])===0){matched++;break}
+      }
+    }
+    var singleMatched=0;
+    for(var si=0;si<pSingles.length;si++){
+      for(var ei=0;ei<eW.length;ei++){
+        if(eW[ei].charAt(0)===pSingles[si]){singleMatched++;break}
+      }
+    }
+    var totalWords=pW.length+pSingles.length;
+    var totalMatched=matched+singleMatched;
+    var ratio=totalMatched/Math.max(totalWords,eW.length);
+    // Also check from Excel side: if most Excel words matched, it's a good signal
+    // even if PPT has many extra words (e.g. "Lived in ID whole life Yes" vs "Q5 Idaho Yes")
+    var eRatio=eW.length>0?matched/eW.length:0;
+    if(ratio>=0.5 || (eRatio>=0.6 && matched>=2)){
+      var useRatio=Math.max(ratio, eRatio);
+      var score=50+Math.round(useRatio*39);
+      score-=Math.abs(eW.length-totalWords)*3;
+      if(eW[0]===pW[0]||(pW[0]&&pW[0].length>=3&&eW[0].indexOf(pW[0])===0)) score+=10;
+      if(pSingles.length>0&&eW[0]&&eW[0].charAt(0)===pSingles[0]) score+=8;
+      if(eN.indexOf('rest')!==-1&&pN.indexOf('rest')===-1) score-=15;
+      return score;
+    }
+  }
+  if(pN.length>2&&eN.indexOf(pN)!==-1) return 30;
+  if(eN.length>2&&pN.indexOf(eN)!==-1) return Math.min(25+Math.round(eN.length/2), 45);
+  return 0;
+}
+
+/* ─── QUESTION TEXT MATCHING ─── */
+function scoreQuestionMatch(sheetName, slideText){
+  // Compare slide question text to sheet header question text
+  // Returns 0-100 score
+  if(!slideText||!sheetQuestionText[sheetName]) return 0;
+  var sWords=slideText.split(/\s+/).filter(function(w){return w.length>3});
+  var qWords=sheetQuestionText[sheetName].split(/\s+/).filter(function(w){return w.length>3});
+  if(!sWords.length||!qWords.length) return 0;
+  // Count matching words (significant words only)
+  var stopWords={the:1,that:1,this:1,with:1,from:1,have:1,would:1,will:1,your:1,they:1,them:1,their:1,been:1,were:1,being:1,which:1,about:1,than:1,into:1,some:1,other:1,also:1,more:1,very:1,most:1,what:1,each:1,when:1};
+  var sigSlide=sWords.filter(function(w){return !stopWords[w]});
+  var sigSheet=qWords.filter(function(w){return !stopWords[w]});
+  if(!sigSlide.length||!sigSheet.length) return 0;
+  var matched=0;
+  for(var i=0;i<sigSlide.length;i++){
+    for(var j=0;j<sigSheet.length;j++){
+      if(sigSlide[i]===sigSheet[j]||
+        (sigSlide[i].length>=5&&sigSheet[j].indexOf(sigSlide[i])===0)||
+        (sigSheet[j].length>=5&&sigSlide[i].indexOf(sigSheet[j])===0)){
+        matched++;break;
+      }
+    }
+  }
+  return Math.round((matched/Math.min(sigSlide.length, sigSheet.length))*100);
+}
+
+/* ─── EXCEL LOOKUP ─── */
+function getExcelHeaders(sheetName){
+  var data=sheetsData[sheetName]; if(!data) return [];
+  var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+  var dataStart=0;
+  for(var r=0;r<data.length;r++){
+    var code=data[r][codeColIdx];
+    if((typeof code==='number'?code:parseInt(code,10))===2){dataStart=r;break}
+  }
+  var headerEnd=dataStart;
+  var maxCol=0;
+  for(var r=0;r<headerEnd;r++){if(data[r]&&data[r].length>maxCol) maxCol=data[r].length}
+  // Build headers by combining all pre-data rows (no propagation)
+  var headers=[];
+  for(var ci=0;ci<maxCol;ci++){
+    var parts=[];
+    for(var r=0;r<headerEnd;r++){
+      var v=String(data[r][ci]||'').replace(/[\n\r]+/g,' ').trim();
+      if(!v || /^\d+$/.test(v)) continue;
+      if(parts.indexOf(v)===-1) parts.push(v);
+    }
+    headers.push(parts.join(' ').trim());
+  }
+  return headers;
+}
+
+function getBottomRowHeaders(sheetName){
+  var data=sheetsData[sheetName]; if(!data) return [];
+  var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+  var dataStart=0;
+  for(var r=0;r<data.length;r++){
+    var code=data[r][codeColIdx];
+    if((typeof code==='number'?code:parseInt(code,10))===2){dataStart=r;break}
+  }
+  if(dataStart===0) return [];
+  var bottomRow=data[dataStart-1];
+  if(!bottomRow) return [];
+  var headers=[];
+  for(var ci=0;ci<bottomRow.length;ci++){
+    headers.push(String(bottomRow[ci]||'').replace(/[\n\r]+/g,' ').trim());
+  }
+  return headers;
+}
+
+function findExcelColumn(sheetName, pptColHeader, siblingCols, groupHint){
+  var pN=norm(pptColHeader);
+  if(!pN) return -1;
+  if(pN==='overall'||pN==='total'||pN==='total %'||pN==='all')
+    return (parseInt(document.getElementById('overallCol').value)||5)-1;
+
+  // Column name aliases: PPT header → banner header variations
+  // Universal aliases only — project-specific ones get added via Match Helper
+  var colAliases={
+    'und':'not sure','undecided':'not sure',
+    'f':'female','m':'male','gender m':'male','gender f':'female'
+  };
+  var aliasVal=colAliases[pN];
+  // Manual column aliases take priority
+  if(userAliases.columns[pN]) aliasVal=userAliases.columns[pN];
+  // Also check last word for aliases (e.g. "Initial Ballot Und" → last word "und" → "not sure")
+  if(!aliasVal && pN.indexOf(' ')!==-1){
+    var lastWord=pN.split(/\s+/).pop();
+    aliasVal=colAliases[lastWord];
+    // Also try full phrase without dots/punctuation
+    if(!aliasVal){
+      var pClean=pN.replace(/\./g,'').replace(/\s+/g,' ').trim();
+      aliasVal=colAliases[pClean];
+    }
+  }
+
+  // Normalize vote history patterns: "Vote History 1 or 2 of 4" → "1/2 of 4"
+  var pNorm=pN.replace(/^vote\s+history\s+/,'');
+  pNorm=pNorm.replace(/(\d+)\s+or\s+(\d+)\s+of\s+(\d+)/,'$1/$2 of $3');
+  pNorm=pNorm.replace(/^(\d+)\s+of\s+(\d+)$/,'$1/of $2');
+  // Also create compact form: "4/of 4" → "4/4"
+  var pCompact=pNorm.replace(/\/of\s+/,'/').replace(/\s+of\s+/,'of');
+  var combined=getExcelHeaders(sheetName);
+  var bottom=getBottomRowHeaders(sheetName);
+  var bestScore=0, bestCol=-1;
+  var len=Math.max(combined.length,bottom.length);
+  for(var ci=0;ci<len;ci++){
+    var eNorm=norm(bottom[ci]||'');
+    // Also normalize Excel header for vote history
+    eNorm=eNorm.replace(/(\d+)\s+or\s+(\d+)\s+of\s+(\d+)/,'$1/$2 of $3');
+    var eCompact=eNorm.replace(/\/of\s+/,'/').replace(/\s+of\s+/,'of');
+    var s1=scoreMatch(pN, norm(combined[ci]||''));
+    var s2=scoreMatch(pN, norm(bottom[ci]||''));
+    // Try normalized vote history comparison
+    var s4=0;
+    if(pNorm!==pN){
+      s4=scoreMatch(pNorm, eNorm);
+      // Also try against combined
+      var eCombNorm=norm(combined[ci]||'');
+      eCombNorm=eCombNorm.replace(/^.*vote\s+history\s+/,'');
+      eCombNorm=eCombNorm.replace(/(\d+)\s+or\s+(\d+)\s+of\s+(\d+)/,'$1/$2 of $3');
+      var s5=scoreMatch(pNorm, eCombNorm);
+      s4=Math.max(s4, s5);
+    }
+    // Also try exact match after normalization (catches "1/2 of 4" = "1/2 of 4")
+    if(pNorm===eNorm && pNorm.length>2) s4=100;
+    // Also try no-space comparison for vote history
+    if(pNorm.replace(/\s+/g,'')===eNorm.replace(/\s+/g,'') && pNorm.length>2) s4=Math.max(s4,92);
+    // Try compact form: "4/4" = "4/4"
+    if(pCompact===eCompact && pCompact.length>1) s4=Math.max(s4,100);
+    if(pCompact.replace(/\s+/g,'')===eCompact.replace(/\s+/g,'') && pCompact.length>1) s4=Math.max(s4,92);
+    var s3=0;
+    var pWords=pN.split(/\s+/);
+    if(pWords.length>=2){
+      var lastPart=pWords.slice(1).join(' ');
+      if(lastPart.length>2) s3=scoreMatch(lastPart, norm(bottom[ci]||''));
+      if(s3>0) s3=Math.max(s3-5, 1);
+    }
+    var best=Math.max(s1,s2,s3,s4);
+    // Alias matching: if PPT header has an alias, check if Excel header contains it
+    if(aliasVal){
+      var eCombN=norm(combined[ci]||'');
+      var eBotN=norm(bottom[ci]||'');
+      if(eCombN.indexOf(aliasVal)!==-1||eBotN.indexOf(aliasVal)!==-1){
+        best=Math.max(best, 85);
+      }
+    }
+    if(best>bestScore){bestScore=best;bestCol=ci}
+  }
+  // Post-processing: disambiguate duplicate bottom-row headers using group context
+  // Only fires when: (1) PPT header has a prefix hint OR sibling columns provide one,
+  // (2) chosen column's bottom label has duplicates,
+  // (3) a duplicate column's group matches the prefix better.
+  if(bestCol>=0){
+    var chosenBottom=norm(bottom[bestCol]||'');
+    // Find all columns with the same bottom-row label
+    var dupes=[];
+    for(var di=0;di<bottom.length;di++){
+      if(di!==bestCol && norm(bottom[di]||'')===chosenBottom && chosenBottom.length>0) dupes.push(di);
+    }
+    if(dupes.length>0){
+      // Extract prefix: from this column's PPT header or from sibling columns
+      var pWords2=pN.split(/\s+/);
+      var prefix='';
+      if(pWords2.length>=2){
+        prefix=pWords2[0].toLowerCase();
+        if(pollingAliases[prefix]) prefix=pollingAliases[prefix];
+      } else if(siblingCols && siblingCols.length>0){
+        // Bare single-word column (like "No"): look at sibling PPT columns for prefix hints
+        // Only use a sibling's prefix if it forms a yes/no/not sure group with this column
+        var yesNoSet={'yes':1,'no':1,'not sure':1,'not':1,'sure':1};
+        var thisBottom=chosenBottom;
+        for(var si2=0;si2<siblingCols.length;si2++){
+          var sibN=norm(siblingCols[si2]);
+          var sibWords=sibN.split(/\s+/);
+          if(sibWords.length>=2){
+            var sibPrefix=sibWords[0].toLowerCase();
+            if(pollingAliases[sibPrefix]) sibPrefix=pollingAliases[sibPrefix];
+            var sibSuffix=sibWords.slice(1).join(' ').toLowerCase();
+            // Only use if sibling suffix is yes/no type AND our bottom is yes/no type
+            if(yesNoSet[sibSuffix] && yesNoSet[thisBottom] && sibPrefix!=='vote' && sibPrefix!=='party' && sibPrefix!=='age'){
+              prefix=sibPrefix;
+              break;
+            }
+          }
+        }
+      }
+      if(prefix){
+        // Build group label for each candidate by scanning left on code=37 rows
+        var data2=sheetsData[sheetName]||[];
+        var cci=(parseInt(document.getElementById('codeCol').value)||1)-1;
+        var ds2=0;
+        for(var rr=0;rr<data2.length;rr++){
+          var cc2=data2[rr][cci];
+          if((typeof cc2==='number'?cc2:parseInt(cc2,10))===2){ds2=rr;break}
+        }
+        function getGroupLabel(colIdx){
+          var parts=[];
+          for(var rr=0;rr<ds2;rr++){
+            var row=data2[rr]||[];
+            var cn2=(typeof row[cci]==='number'?row[cci]:parseInt(row[cci],10));
+            if(cn2!==37) continue;
+            var v=String(row[colIdx]||'').replace(/[\n\r]+/g,' ').trim();
+            if(!v||/^\d+$/.test(v)){
+              for(var lci=colIdx-1;lci>=Math.max(0,colIdx-10);lci--){
+                var lv=String(row[lci]||'').replace(/[\n\r]+/g,' ').trim();
+                if(lv&&!/^\d+$/.test(lv)){v=lv;break}
+              }
+            }
+            if(v&&!/^\d+$/.test(v)&&parts.indexOf(v)===-1) parts.push(v);
+          }
+          return parts.join(' ').toLowerCase();
+        }
+        var chosenGroup=getGroupLabel(bestCol);
+        var prefixInChosen=chosenGroup.indexOf(prefix)!==-1;
+        if(!prefixInChosen){
+          // Check if any duplicate's group matches the prefix
+          for(var di2=0;di2<dupes.length;di2++){
+            var dupeGroup=getGroupLabel(dupes[di2]);
+            if(dupeGroup.indexOf(prefix)!==-1){
+              bestCol=dupes[di2];
+              break;
+            }
+          }
+        }
+      }
+      // Group-hint disambiguation:
+      // If there are duplicates and a groupHint from PPT table header, use it
+      // to pick the correct column (e.g. "Trump Image" group → Q8 Trump Fav, not Q10 Raffensperger Fav)
+      if(groupHint && dupes.length>0){
+        var gH=norm(groupHint);
+        if(gH){
+          var allCandidates=[bestCol].concat(dupes);
+          // For each candidate, scan left in the Excel headers to find the group label
+          var data2=sheetsData[sheetName]||[];
+          var cci=(parseInt(document.getElementById('codeCol').value)||1)-1;
+          var ds2=0;
+          for(var rr=0;rr<data2.length;rr++){
+            var cc2=data2[rr][cci];
+            if((typeof cc2==='number'?cc2:parseInt(cc2,10))===2){ds2=rr;break}
+          }
+          function getGroupForCol(colIdx){
+            // Scan left from colIdx through header rows to find group text
+            // Skip the bottom header row (ds2-1) which contains sub-headers like Fav/Unfav
+            var groupParts=[];
+            for(var rr=0;rr<ds2-1;rr++){
+              var row=data2[rr]||[];
+              // Look at this col and scan left for non-empty text
+              for(var lci=colIdx;lci>=Math.max(0,colIdx-5);lci--){
+                var v=String(row[lci]||'').replace(/[\n\r]+/g,' ').trim();
+                if(v && !/^\d+(\.\d+)?$/.test(v)){
+                  if(groupParts.indexOf(v)===-1) groupParts.push(v);
+                  break;
+                }
+              }
+            }
+            return groupParts.join(' ').toLowerCase();
+          }
+          var bestGroupScore=0, bestGroupCol=bestCol;
+          for(var gc=0;gc<allCandidates.length;gc++){
+            var gcGroup=getGroupForCol(allCandidates[gc]);
+            var gs=scoreMatch(gH, gcGroup);
+            if(gs>bestGroupScore){bestGroupScore=gs;bestGroupCol=allCandidates[gc]}
+          }
+          if(bestGroupScore>=50 && bestGroupCol!==bestCol){
+            bestCol=bestGroupCol;
+          }
+        }
+      }
+    }
+  }
+  // Post-group: alias + group-hint override
+  // When an alias maps to a different column AND that column's group matches the PPT group hint better,
+  // prefer the group-matching column even without exact-duplicate bottom labels.
+  // This fixes: PPT "Mod" (under "Ideology" group) → should match col 27 "Moderate" (Q3 Ideology)
+  //             not col 84 "Mod" (Q19 Ideology of Judges)
+  if(bestCol>=0 && groupHint && aliasVal){
+    var gH2=norm(groupHint);
+    if(gH2){
+      // Find all columns whose bottom header matches the alias value
+      var aliasCandidates=[];
+      for(var aci=0;aci<bottom.length;aci++){
+        var aBotN=norm(bottom[aci]||'');
+        var aCombN=norm(combined[aci]||'');
+        if(aBotN.indexOf(aliasVal)!==-1||aCombN.indexOf(aliasVal)!==-1){
+          aliasCandidates.push(aci);
+        }
+      }
+      if(aliasCandidates.length>0){
+        // Score each by group match
+        var data3=sheetsData[sheetName]||[];
+        var cci3=(parseInt(document.getElementById('codeCol').value)||1)-1;
+        var ds3=0;
+        for(var rr3=0;rr3<data3.length;rr3++){
+          var cc3=data3[rr3][cci3];
+          if((typeof cc3==='number'?cc3:parseInt(cc3,10))===2){ds3=rr3;break}
+        }
+        function getGroupForCol2(colIdx2){
+          var gp2=[];
+          for(var rr3b=0;rr3b<ds3-1;rr3b++){
+            var row3=data3[rr3b]||[];
+            for(var lci3=colIdx2;lci3>=Math.max(0,colIdx2-5);lci3--){
+              var v3=String(row3[lci3]||'').replace(/[\n\r]+/g,' ').trim();
+              if(v3 && !/^\d+(\.\d+)?$/.test(v3)){
+                if(gp2.indexOf(v3)===-1) gp2.push(v3);
+                break;
+              }
+            }
+          }
+          return gp2.join(' ').toLowerCase();
+        }
+        var bestAliasCol=bestCol, bestAliasGS=0;
+        // Also score current bestCol
+        var curGroup=getGroupForCol2(bestCol);
+        var curGS=scoreMatch(gH2, curGroup);
+        // Also count: shorter group text = more specific match when scores are equal
+        for(var ac2=0;ac2<aliasCandidates.length;ac2++){
+          var acGroup=getGroupForCol2(aliasCandidates[ac2]);
+          var acGS=scoreMatch(gH2, acGroup);
+          // Bonus: if group contains the hint as a standalone segment (not buried in longer phrase)
+          // "q3 ideology" is better match for "ideology" than "q19 ideology of judges"
+          // because the latter has extra qualifying words
+          var acWords=acGroup.split(/\s+/).filter(function(w){return w.length>1 && !/^q\d/.test(w)});
+          var gWords=gH2.split(/\s+/).filter(function(w){return w.length>1});
+          if(gWords.length>0 && acWords.length>0){
+            var gInAc=gWords.filter(function(gw){return acWords.indexOf(gw)!==-1}).length;
+            // Penalize groups with many extra words beyond the hint
+            var extraWords=acWords.length-gInAc;
+            if(extraWords<=1 && gInAc>=gWords.length) acGS+=15; // tight match bonus
+          }
+          if(acGS>bestAliasGS){bestAliasGS=acGS;bestAliasCol=aliasCandidates[ac2]}
+        }
+        if(bestAliasGS>curGS && bestAliasGS>=30){
+          bestCol=bestAliasCol;
+        }
+      }
+    }
+  }
+  // Post-processing 2: Vote History cross-tab redirect
+  // When matched column lacks "vote history" in its combined header but a VH pattern
+  // is detected, check if there's a standalone Vote History column with the compact label.
+  if(bestCol>=0 && bestScore>=90 && /\d+\/\d/.test(pN)){
+    var combN=norm(combined[bestCol]||'');
+    if(combN.indexOf('vote history')===-1){
+      // Extract compact VH form: "3/4 of 4" → "3/4", "1/2 of 4" → "1/2"
+      var pVHCompact=pN.replace(/.*?(\d+\/\d+).*/, '$1');
+      for(var vi=0;vi<len;vi++){
+        if(vi===bestCol) continue;
+        var vBottom=norm(bottom[vi]||'');
+        var vComb=norm(combined[vi]||'');
+        if(vBottom===pVHCompact && vComb.indexOf('vote history')!==-1){
+          bestCol=vi;
+          break;
+        }
+      }
+    }
+  }
+  return bestCol;
+}
+
+function findExcelColumnWithScore(sheetName, pptColHeader, siblingCols, groupHint){
+  var pN=norm(pptColHeader);
+  if(!pN) return {col:-1,score:0};
+  if(pN==='overall'||pN==='total'||pN==='total %'||pN==='all')
+    return {col:(parseInt(document.getElementById('overallCol').value)||5)-1, score:100};
+  var col=findExcelColumn(sheetName, pptColHeader, siblingCols, groupHint);
+  if(col<0) return {col:-1,score:0};
+  // Compute match score for this specific column
+  var combined=getExcelHeaders(sheetName);
+  var bottom=getBottomRowHeaders(sheetName);
+  var pNorm=pN.replace(/^vote\s+history\s+/,'');
+  pNorm=pNorm.replace(/(\d+)\s+or\s+(\d+)\s+of\s+(\d+)/,'$1/$2 of $3');
+  pNorm=pNorm.replace(/^(\d+)\s+of\s+(\d+)$/,'$1/of $2');
+  var eNorm=norm(bottom[col]||'');
+  eNorm=eNorm.replace(/(\d+)\s+or\s+(\d+)\s+of\s+(\d+)/,'$1/$2 of $3');
+  var s1=scoreMatch(pN, norm(combined[col]||''));
+  var s2=scoreMatch(pN, norm(bottom[col]||''));
+  var s4=0;
+  if(pNorm!==pN){
+    var pCompact=pNorm.replace(/\/of\s+/,'/').replace(/\s+of\s+/,'of');
+    var eCompact=eNorm.replace(/\/of\s+/,'/').replace(/\s+of\s+/,'of');
+    if(pNorm===eNorm && pNorm.length>2) s4=100;
+    else if(pNorm.replace(/\s+/g,'')===eNorm.replace(/\s+/g,'') && pNorm.length>2) s4=92;
+    else if(pCompact===eCompact && pCompact.length>1) s4=100;
+    else s4=scoreMatch(pNorm, eNorm);
+  }
+  var pWords=pN.split(/\s+/);
+  var s3=0;
+  if(pWords.length>=2){
+    var lastPart=pWords.slice(1).join(' ');
+    if(lastPart.length>2) s3=scoreMatch(lastPart, norm(bottom[col]||''));
+    if(s3>0) s3=Math.max(s3-5,40);
+  }
+  // Check alias match (same logic as findExcelColumn)
+  var colAliases2={
+    'und':'not sure','undecided':'not sure',
+    'f':'female','m':'male','gender m':'male','gender f':'female'
+  };
+  var aliasVal2=colAliases2[pN];
+  if(!aliasVal2 && pN.indexOf(' ')!==-1){
+    var lastWord2=pN.split(/\s+/).pop();
+    aliasVal2=colAliases2[lastWord2];
+    if(!aliasVal2){
+      var pClean2=pN.replace(/\./g,'').replace(/\s+/g,' ').trim();
+      aliasVal2=colAliases2[pClean2];
+    }
+  }
+  var s5=0;
+  if(aliasVal2){
+    var eCombN2=norm(combined[col]||'');
+    var eBotN2=norm(bottom[col]||'');
+    if(eCombN2.indexOf(aliasVal2)!==-1||eBotN2.indexOf(aliasVal2)!==-1) s5=85;
+  }
+  // Vote history: "3/4 of 4" should match "3/4", "4 of 4" should match "4/4"
+  var vhMatch=pN.match(/^(\d+\/\d+)\s+of\s+\d+$/);
+  if(vhMatch && norm(bottom[col]||'')===vhMatch[1]) s5=Math.max(s5, 95);
+  var vhMatch2=pN.match(/^(\d+)\s+of\s+(\d+)$/);
+  if(vhMatch2 && norm(bottom[col]||'')===vhMatch2[1]+'/'+vhMatch2[2]) s5=Math.max(s5, 95);
+  return {col:col, score:Math.max(s1,s2,s3,s4,s5)};
+}
+
+function findExcelRow(sheetName, pptLabel){
+  var data=sheetsData[sheetName]; if(!data) return null;
+  var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+  var labelColIdx=(parseInt(document.getElementById('labelCol').value)||2)-1;
+
+  for(var r=0;r<data.length;r++){
+    var code=data[r][codeColIdx];
+    var cn=(typeof code==='number')?code:parseInt(code,10);
+    if(cn!==3 && cn!==33) continue;
+    var exLabel=String(data[r][labelColIdx]||'').trim();
+    if(labelsMatch(pptLabel, exLabel)) return {rowIdx:r, label:exLabel};
+  }
+  return null;
+}
+
+function getExcelValue(sheetName, rowIdx, colIdx){
+  var data=sheetsData[sheetName]; if(!data||!data[rowIdx]) return null;
+  var raw=data[rowIdx][colIdx];
+  if(raw===undefined||raw===null||raw==='') return null;
+  if(typeof raw==='string'&&raw==='0.0') return 0;
+  var num=typeof raw==='number'?raw:parseFloat(raw);
+  if(isNaN(num)) return null;
+  return num;
+}
+
+function roundVal(num, isOverallCol){
+  if(isOverallCol && Math.abs(num)<=1.5){
+    return Math.floor(num*100+0.5);
+  } else {
+    return Math.floor(num+0.5);
+  }
+}
+
+function compareValues(pptNum, excelRaw, colIdx){
+  var overallColIdx=(parseInt(document.getElementById('overallCol').value)||5)-1;
+  var isOverall=(colIdx===overallColIdx);
+  var asDecimal=Math.floor(excelRaw*100+0.5);
+  var asRaw=Math.floor(excelRaw+0.5);
+  var diffDec=Math.abs(pptNum-asDecimal);
+  var diffRaw=Math.abs(pptNum-asRaw);
+  var diff, rounded, interp;
+  if(diffDec<=diffRaw){diff=diffDec;rounded=asDecimal;interp='dec'}
+  else{diff=diffRaw;rounded=asRaw;interp='raw'}
+  // If diff=1, try alternate rounding methods (floor, ceil, round-half-away-from-zero)
+  if(diff===1){
+    var candidates=interp==='dec'?[Math.floor(excelRaw*100),Math.ceil(excelRaw*100),
+      excelRaw*100>=0?Math.ceil(excelRaw*100-0.5):Math.floor(excelRaw*100+0.5)]
+      :[Math.floor(excelRaw),Math.ceil(excelRaw),
+      excelRaw>=0?Math.ceil(excelRaw-0.5):Math.floor(excelRaw+0.5)];
+    for(var ai=0;ai<candidates.length;ai++){
+      if(candidates[ai]===pptNum){diff=0;rounded=pptNum;break}
+    }
+  }
+  return {excelValue:rounded, diff:diff, status:diff===0?'MATCH':'ERROR', interp:interp, raw:excelRaw};
+}
+
+/* ─── DETERMINE TABLE TYPE ─── */
+function isDataTable(tbl){
+  if(tbl.rows.length<2) return false;
+  var numCount=0, totalCells=0;
+  for(var r=1;r<tbl.rows.length;r++){
+    for(var c=0;c<tbl.rows[r].length;c++){
+      var v=tbl.rows[r][c].replace(/%/g,'').trim();
+      totalCells++;
+      if(/^[+-]?\d+\.?\d*$/.test(v)) numCount++;
+    }
+  }
+  return totalCells>0 && (numCount/totalCells)>0.4;
+}
+
+function detectHeaderRows(tbl){
+  // Special case: 2-column tables where col 0=label, col 1=value (demographics)
+  // These have 0 header rows — every row is data
+  if(tbl.rows.length>0 && (tbl.rows[0]||[]).length===2){
+    var allLabelValue=true;
+    for(var r=0;r<tbl.rows.length;r++){
+      var c0=(tbl.rows[r][0]||'').trim();
+      var c1=(tbl.rows[r][1]||'').replace(/%/g,'').trim();
+      if(!c0 || !c1) continue;
+      if(/^[+-]?\d+\.?\d*$/.test(c1)){/* col1 is number, good */}
+      else { allLabelValue=false; break; }
+    }
+    if(allLabelValue) return 0;
+  }
+  var count=0;
+  for(var r=0;r<Math.min(4,tbl.rows.length);r++){
+    var numCells=0, textCells=0;
+    for(var c=0;c<tbl.rows[r].length;c++){
+      var v=tbl.rows[r][c].replace(/%/g,'').trim();
+      if(!v) continue;
+      if(/^[+-]?\d+\.?\d*$/.test(v)) numCells++; else textCells++;
+    }
+    if(textCells>=numCells) count=r+1; else break;
+  }
+  return Math.max(count,1);
+}
+
+/* ─── CONFIDENCE SCORING ─── */
+function getConfidence(result, matchMethod, colScore){
+  // Confidence = how sure are we that we found the RIGHT cell?
+  // A big diff with exact label+column match = HIGH confidence error
+  // A small diff with fuzzy/blind match = LOW confidence (might be wrong cell)
+  if(!result) return {level:'LOW',reason:'no result'};
+  if(result.status==='NOT FOUND') return {level:'LOW',reason:'not found'};
+
+  var conf='HIGH', reasons=[];
+
+  // Location confidence: did we find the right cell?
+  if(matchMethod==='exact') reasons.push('exact label');
+  else if(matchMethod==='fuzzy') {conf='MED'; reasons.push('fuzzy label');}
+  else if(matchMethod==='blind') {conf='LOW'; reasons.push('blind scan');}
+
+  // Column confidence
+  var cs=colScore||0;
+  // Boost: if column matched to the configured Overall/Total column, it's always strong
+  var overallColIdx=(parseInt(document.getElementById('overallCol').value)||5)-1;
+  var debugCol=result.debug||'';
+  var matchedOverall=debugCol.indexOf('col '+(overallColIdx+1)+' ')!==-1 && /overall|total/i.test(result.column||'');
+  if(matchedOverall) cs=100;
+  if(cs>=80) reasons.push('strong col');
+  else if(cs>=50) {if(conf==='HIGH') conf='MED'; reasons.push('fair col');}
+  else {conf='LOW'; reasons.push('weak col');}
+
+  // For MATCH/ROUNDING: value confirms we found the right cell
+  if(result.status==='MATCH') reasons.push('exact value');
+  else if(result.status==='ROUNDING') reasons.push('±1 rounding');
+  else if(result.status==='ERROR'){
+    // When label+column match are strong but value differs,
+    // that's a CONFIDENT error — don't downgrade confidence
+    var d=parseInt(result.diff)||0;
+    if(matchMethod==='blind'){
+      // Blind scan with big diff = probably wrong cell
+      if(d>=5) {conf='LOW'; reasons.push('blind+diff≥5');}
+    } else if(matchMethod==='fuzzy'){
+      // Fuzzy match with big diff = uncertain
+      if(d>=10) {conf='LOW'; reasons.push('fuzzy+diff≥10');}
+    }
+    // Exact label match + strong column → stay HIGH even with big diff
+    // This is a confident error finding
+    reasons.push('diff='+d);
+  }
+
+  return {level:conf, reason:reasons.join(', ')};
+}
+
+/* ─── MAIN SCAN ─── */
+function runFullScan(){
+  if(!deckSlides.length||!sheetNames.length) return;
+
+  // Project confirmation: show what files are loaded
+  // First scan shows confirmation, subsequent scans skip it
+  if(!window._scanConfirmed){
+    var previewSheets=sheetNames.slice(1,4);
+    var sheetInfo=previewSheets.map(function(s){
+      var qn=sheetQuestionNum[s]||'';
+      var qt=(sheetQuestionText[s]||'').substring(0,30);
+      return qn+(qt?' - '+qt:'');
+    }).join(', ');
+    var confirmDiv=document.createElement('div');
+    confirmDiv.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    confirmDiv.innerHTML='<div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px 32px;max-width:500px;font-family:var(--sans);color:#e2e8f0">'
+      +'<div style="font-size:16px;font-weight:700;margin-bottom:16px">Confirm Project Files</div>'
+      +'<div style="font-size:13px;margin-bottom:8px">\u{1F4CA} <b>PPT:</b> '+esc(pptFileName)+' ('+deckSlides.length+' slides)</div>'
+      +'<div style="font-size:13px;margin-bottom:8px">\u{1F4CB} <b>Excel:</b> '+esc(excelFileName)+' ('+sheetNames.length+' sheets)</div>'
+      +(workbook2?'<div style="font-size:13px;margin-bottom:8px">\u{1F4CB} <b>Excel 2:</b> '+esc(excelFileName2)+'</div>':'')
+      +'<div style="font-size:12px;color:#94a3b8;margin:12px 0">Sheets: '+esc(sheetInfo)+'...</div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+      +'<button id="_confirmNo" style="background:#334155;color:#e2e8f0;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600">Cancel</button>'
+      +'<button id="_confirmYes" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600">Run Scan</button>'
+      +'</div></div>';
+    document.body.appendChild(confirmDiv);
+    document.getElementById('_confirmNo').onclick=function(){confirmDiv.remove()};
+    document.getElementById('_confirmYes').onclick=function(){
+      confirmDiv.remove();
+      window._scanConfirmed=true;
+      runFullScan();
+    };
+    return;
+  }
+
+  results=[];
+  skippedItems=[];
+  document.getElementById('scanLog').textContent='';
+  document.getElementById('scanLog').classList.remove('hidden');
+  var prog=document.getElementById('scanProgress'),fill=document.getElementById('scanFill'),stat=document.getElementById('scanStatus');
+  prog.classList.remove('hidden');
+
+  var fromSlide=parseInt(document.getElementById('slideFrom').value)||1;
+  var toSlide=parseInt(document.getElementById('slideTo').value)||9999;
+
+  // Build label index across all Excel sheets
+  var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+  var labelColIdx=(parseInt(document.getElementById('labelCol').value)||2)-1;
+  var labelIndex={};
+  sheetNames.forEach(function(sn){
+    var data=sheetsData[sn]; if(!data) return;
+    for(var r=0;r<data.length;r++){
+      var code=data[r][codeColIdx];
+      var cn=(typeof code==='number')?code:parseInt(code,10);
+      if(cn!==3 && cn!==33) continue;
+      var lab=String(data[r][labelColIdx]||'').trim();
+      if(!lab) continue;
+      var key=norm(lab);
+      var keyStripped=norm(stripQPrefix(lab));
+      if(!labelIndex[key]) labelIndex[key]=[];
+      labelIndex[key].push({sheet:sn, rowIdx:r, label:lab});
+      if(keyStripped!==key){
+        if(!labelIndex[keyStripped]) labelIndex[keyStripped]=[];
+        labelIndex[keyStripped].push({sheet:sn, rowIdx:r, label:lab});
+      }
+    }
+  });
+
+  // Build second label index if 2nd banner loaded
+  var labelIndex2=null;
+  if(workbook2 && sheetNames2.length>0){
+    labelIndex2={};
+    sheetNames2.forEach(function(sn){
+      var data=sheetsData2[sn]; if(!data) return;
+      for(var r=0;r<data.length;r++){
+        var code=data[r][codeColIdx];
+        var cn=(typeof code==='number')?code:parseInt(code,10);
+        if(cn!==3 && cn!==33) continue;
+        var lab=String(data[r][labelColIdx]||'').trim();
+        if(!lab) continue;
+        var key=norm(lab);
+        var keyStripped=norm(stripQPrefix(lab));
+        if(!labelIndex2[key]) labelIndex2[key]=[];
+        labelIndex2[key].push({sheet:sn, rowIdx:r, label:lab});
+        if(keyStripped!==key){
+          if(!labelIndex2[keyStripped]) labelIndex2[keyStripped]=[];
+          labelIndex2[keyStripped].push({sheet:sn, rowIdx:r, label:lab});
+        }
+      }
+    });
+    log('Built label indices: Banner 1 ('+Object.keys(labelIndex).length+' labels), Banner 2 ('+Object.keys(labelIndex2).length+' labels)');
+  }
+
+  // Helper: derive keywords from filenames for banner routing
+  var banner1Keywords=[], banner2Keywords=[];
+  if(labelIndex2){
+    // Extract meaningful words from filenames (skip common words)
+    var skipWords=['banners','banner','xlsx','xls','the','and','of','for','in','on','a','an'];
+    var extractKeywords=function(fn){
+      return fn.replace(/[._-]/g,' ').replace(/\.(xlsx|xls)$/i,'').toLowerCase()
+        .split(/\s+/).filter(function(w){return w.length>2 && skipWords.indexOf(w)===-1});
+    };
+    banner1Keywords=extractKeywords(excelFileName);
+    banner2Keywords=extractKeywords(excelFileName2);
+    log('Banner 1 keywords: '+banner1Keywords.join(', '));
+    log('Banner 2 keywords: '+banner2Keywords.join(', '));
+  }
+
+  // Function to determine which banner a table belongs to
+  function pickBanner(tbl){
+    if(!labelIndex2) return 1; // only one banner
+    // Check first few rows for text matching banner keywords
+    var tableText='';
+    for(var r=0;r<Math.min(3,tbl.rows.length);r++){
+      for(var c=0;c<tbl.rows[r].length;c++){
+        tableText+=' '+String(tbl.rows[r][c]||'');
+      }
+    }
+    tableText=tableText.toLowerCase();
+    var score1=0, score2=0;
+    for(var k=0;k<banner1Keywords.length;k++){
+      if(tableText.indexOf(banner1Keywords[k])!==-1) score1++;
+    }
+    for(var k=0;k<banner2Keywords.length;k++){
+      if(tableText.indexOf(banner2Keywords[k])!==-1) score2++;
+    }
+    if(score2>score1) return 2;
+    return 1; // default to banner 1
+  }
+
+  var nr=[];
+  var slides=deckSlides.filter(function(s){return s.slideNum>=fromSlide && s.slideNum<=toSlide});
+  var total=slides.length;
+
+  for(var si=0;si<slides.length;si++){
+    var slide=slides[si];
+    fill.style.width=Math.round(((si+1)/total)*100)+'%';
+    stat.textContent='Slide '+slide.slideNum+' ('+slide.tables.length+' tables)...';
+    log('── Slide '+slide.slideNum+' ──');
+    var slideSheetCounts={};  // track sheet frequency for this slide
+    var slideStartIdx=nr.length;  // remember where this slide's results start
+    // Detect audience profile / demographics slides
+    var isAudienceProfile=false;
+    if(slide.textShapes){
+      for(var api=0;api<slide.textShapes.length;api++){
+        var apText=slide.textShapes[api].text.trim().toLowerCase();
+        if(/audience\s*profile|demographics|sample\s*(comp|profile|breakdown)|respondent\s*profile/.test(apText)){
+          isAudienceProfile=true; break;
+        }
+      }
+    }
+    if(isAudienceProfile) log('  ★ Audience Profile slide detected — all lookups use Overall');
+    // Collect slide context text (question wording) for sheet disambiguation
+    var slideContextText='';
+    if(slide.textShapes){
+      for(var tsi=0;tsi<slide.textShapes.length;tsi++){
+        var st=slide.textShapes[tsi].text;
+        if(st.length>30) slideContextText+=' '+st;  // Only long text shapes
+      }
+    }
+    slideContextText=slideContextText.toLowerCase().replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim();
+
+    for(var ti=0;ti<slide.tables.length;ti++){
+      var tbl=slide.tables[ti];
+      if(tbl.rows.length<2) continue;
+      var _mergedStart=tbl._merged?nr.length:-1;
+
+      // Multi-banner routing: pick which banner to use for this table
+      var _activeBanner=pickBanner(tbl);
+      var _activeLabelIndex=labelIndex;
+      var _origSheetsData=sheetsData, _origSheetNames=sheetNames, _origSheetQText=sheetQuestionText, _origSheetQNum=sheetQuestionNum;
+      if(_activeBanner===2){
+        sheetsData=sheetsData2; sheetNames=sheetNames2; sheetQuestionText=sheetQuestionText2; sheetQuestionNum=sheetQuestionNum2;
+        _activeLabelIndex=labelIndex2;
+        log('    → Using banner 2 ('+excelFileName2+')');
+      }
+
+      var pptHeaderCount=detectHeaderRows(tbl);
+      var hasRowLabelsInTable=false;
+      
+      // For 2-column demographic tables (headers=0), find nearby text label
+      // Skip on audience profile slides — we already know everything is Overall
+      var nearbyLabel='';
+      if(!isAudienceProfile && pptHeaderCount===0 && (tbl.rows[0]||[]).length===2 && slide.textShapes){
+        var bestDist=Infinity;
+        for(var nli=0;nli<slide.textShapes.length;nli++){
+          var ts=slide.textShapes[nli];
+          var tsText=ts.text.trim();
+          // Skip slide titles and very long text
+          if(!tsText || tsText.length>40 || tsText.length<2) continue;
+          if(/^(audience profile|slide \d|page \d)/i.test(tsText)) continue;
+          // Find text shapes that are to the left of or above the table and close by
+          var dx=tbl.x-ts.x, dy=tbl.y-ts.y;
+          if(dx<0 && Math.abs(dx)>2000000) continue; // text is far to the right of table
+          var dist=Math.sqrt(dx*dx+dy*dy);
+          if(dist<bestDist){bestDist=dist;nearbyLabel=tsText;}
+        }
+        if(nearbyLabel) log('    Nearby label for 2-col table: "'+nearbyLabel+'"');
+      }
+
+      for(var dr=pptHeaderCount;dr<tbl.rows.length;dr++){
+        var firstCell=tbl.rows[dr][0].replace(/%/g,'').trim();
+        if(firstCell && !/^[+-]?\d+\.?\d*$/.test(firstCell)){hasRowLabelsInTable=true;break}
+      }
+
+      var colHeaders=[];
+      var colGroup=[]; // Group header from row 0 for each column (propagated across merged cells)
+      // Build group context: propagate row 0 headers rightward to fill merged-cell gaps
+      var lastGroup='';
+      for(var ci=0;ci<(tbl.rows[0]||[]).length;ci++){
+        var v0=((tbl.rows[0]||[])[ci]||'').trim();
+        if(v0 && !/^\d+%?$/.test(v0)) lastGroup=v0;
+        else if(!v0 && lastGroup && pptHeaderCount>1) { /* keep lastGroup */ }
+        else if(v0) lastGroup='';
+        colGroup.push(lastGroup);
+      }
+      for(var ci=0;ci<(tbl.rows[0]||[]).length;ci++){
+        var h='';
+        for(var hr=0;hr<pptHeaderCount;hr++){
+          var v=(tbl.rows[hr]||[])[ci]||'';
+          v=v.trim();
+          if(v && v!==h) h+=(h?' ':'')+v;
+        }
+        colHeaders.push(h.trim());
+      }
+      log('  Table '+(ti+1)+': '+tbl.rows.length+'r x '+(tbl.rows[0]||[]).length+'c, headers='+pptHeaderCount+', labelsInTable='+hasRowLabelsInTable);
+      log('    Cols: '+colHeaders.join(' | '));
+
+      // Skip tables where ALL column headers are pure numbers (chart data tables)
+      // But NOT 2-column label/value tables (demographics)
+      var nonEmptyHeaders=colHeaders.filter(function(h){return h.trim().length>0});
+      var numericHeaders=nonEmptyHeaders.filter(function(h){return /^\d+%?(\s+\d+%?)*$/.test(h.trim())});
+      if(nonEmptyHeaders.length>0 && numericHeaders.length===nonEmptyHeaders.length){
+        if((tbl.rows[0]||[]).length===2 && hasRowLabelsInTable){
+          log('    2-column demographic table, treating value column as Overall');
+        } else {
+          log('    ⏭ Skipping chart data table (all-numeric column headers)');
+          skippedItems.push({slide:String(slide.slideNum),label:'(chart data table)',reason:'All column headers are numbers',table:ti+1});
+          continue;
+        }
+      }
+
+      if(hasRowLabelsInTable){
+        // ─── TYPE A: Row labels in column 0 ───
+        // Detect tracking tables (most labels are dates)
+        var datePattern=/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{0,4}$/;
+        var dateCount=0, labelCount=0;
+        for(var dr=pptHeaderCount;dr<tbl.rows.length;dr++){
+          var lbl=norm(tbl.rows[dr][0].trim());
+          if(!lbl||/^\d+%?$/.test(lbl)) continue;
+          labelCount++;
+          if(datePattern.test(lbl)) dateCount++;
+        }
+        if(labelCount>0 && dateCount/labelCount>0.5){
+          log('    ⏭ Skipping tracking table ('+dateCount+'/'+labelCount+' date labels)');
+          for(var dr=pptHeaderCount;dr<tbl.rows.length;dr++){
+            var rl=tbl.rows[dr][0].trim();
+            if(rl) skippedItems.push({slide:String(slide.slideNum),label:rl,reason:'Tracking table (date labels)',table:ti+1});
+          }
+          continue;
+        }
+
+        var dataColStart=1;
+        var prevLabelWasNet=false;
+        var prevNetLabel='';
+        for(var dr=pptHeaderCount;dr<tbl.rows.length;dr++){
+          var row=tbl.rows[dr];
+          var rowLabel=row[0].trim();
+          if(!rowLabel) continue;
+          var cleanLabel=rowLabel.replace(/[\s\u00a0]+/g,' ').replace(/\*+$/,'').trim();
+          if(/^\d+%?$/.test(cleanLabel)) continue;
+          // Strip trailing percentage from labels like "Strongly 69%" → "Strongly"
+          cleanLabel=cleanLabel.replace(/\s+\d+%$/,'').trim();
+          // Skip second consecutive Net row with identical label (calculated net change, not from banners)
+          var isNetRow=/^net\b/i.test(cleanLabel);
+          if(isNetRow && prevLabelWasNet && cleanLabel.toLowerCase()===prevNetLabel){
+            skippedItems.push({slide:String(slide.slideNum),label:cleanLabel,reason:'Consecutive Net row (calculated change)',table:ti+1});
+            continue;
+          }
+          if(isNetRow){prevLabelWasNet=true;prevNetLabel=cleanLabel.toLowerCase();}else{prevLabelWasNet=false;prevNetLabel='';}
+
+          for(var vc=dataColStart;vc<row.length;vc++){
+            var cellText=row[vc].trim();
+            if(!cellText) continue;
+            var numMatch=cellText.match(/^([+-]?\d+\.?\d*)\s*%?$/);
+            if(!numMatch) continue;
+            var pptNum=Math.round(parseFloat(numMatch[1]));
+            var colName=colHeaders[vc]||('col '+(vc+1));
+            // On audience profile slides, ALL values are Overall column
+            if(isAudienceProfile) colName='Overall';
+            // For 2-column label/value tables (demographics), treat value column as Overall
+            var isNumericCol=/^\d+%?(\s+\d+%?)*$/.test(colName.trim());
+            var isEmptyCol=!colHeaders[vc] || colHeaders[vc].trim()==='';
+            if(isNumericCol || isEmptyCol){
+              if(row.length===2 && hasRowLabelsInTable) colName='Overall';
+              else if(isNumericCol && !isAudienceProfile) continue;
+            }
+
+            var _sheetHint=null, _mc=0; for(var _sk in slideSheetCounts){if(slideSheetCounts[_sk]>_mc){_mc=slideSheetCounts[_sk];_sheetHint=_sk}}
+            // For demographic tables with nearby label, enhance context for sheet matching
+            var _ctx=slideContextText;
+            if(nearbyLabel) _ctx=nearbyLabel.toLowerCase()+' '+_ctx;
+            var result=findBestMatch(_activeLabelIndex, cleanLabel, colName, pptNum, slide.slideNum, ti, _sheetHint, colHeaders, _ctx, colGroup[vc]||'');
+            if(result){nr.push(result); if(result.sheet&&result.sheet!=='?') slideSheetCounts[result.sheet]=(slideSheetCounts[result.sheet]||0)+1;}
+          }
+        }
+      } else {
+        // ─── TYPE B: Row labels are OUTSIDE the table ───
+        var dataRowCount=tbl.rows.length-pptHeaderCount;
+        if(dataRowCount<1) continue;
+
+        var dataRowYs=[];
+        var cumY=tbl.y;
+        for(var rh=0;rh<tbl.rowHeights.length;rh++){
+          var h=tbl.rowHeights[rh]||0;
+          if(rh>=pptHeaderCount){
+            dataRowYs.push(cumY + h/2);
+          }
+          cumY+=h;
+        }
+        if(dataRowYs.length<dataRowCount){
+          dataRowYs=[];
+          var totalRowH=0;
+          for(var rh=0;rh<tbl.rowHeights.length;rh++) totalRowH+=tbl.rowHeights[rh];
+          var headerH=0;
+          for(var rh=0;rh<pptHeaderCount&&rh<tbl.rowHeights.length;rh++) headerH+=tbl.rowHeights[rh];
+          var avgDataRowH=(totalRowH-headerH)/dataRowCount;
+          for(var dr=0;dr<dataRowCount;dr++){
+            dataRowYs.push(tbl.y+headerH+(dr*avgDataRowH)+(avgDataRowH/2));
+          }
+        }
+
+        var candidateLabels=slide.textShapes.filter(function(s){
+          return s.x < tbl.x && s.text.length>3 && s.text.length<100;
+        });
+        candidateLabels.sort(function(a,b){return a.y-b.y});
+
+        if(candidateLabels.length>0){
+          var xs=candidateLabels.map(function(s){return s.x}).sort(function(a,b){return a-b});
+          var tolerance=tbl.x*0.15||500000;
+          var bestCount=0, bestX=xs[0];
+          for(var i=0;i<xs.length;i++){
+            var count=0;
+            for(var j=0;j<xs.length;j++){
+              if(Math.abs(xs[j]-xs[i])<tolerance) count++;
+            }
+            if(count>bestCount){bestCount=count;bestX=xs[i]}
+          }
+          candidateLabels=candidateLabels.filter(function(s){
+            return Math.abs(s.x-bestX)<tolerance;
+          });
+        }
+
+        var minDataY=dataRowYs[0]||0;
+        var maxDataY=dataRowYs[dataRowYs.length-1]||0;
+        var rowSpan=maxDataY-minDataY;
+        var margin=rowSpan/(dataRowCount||1);
+        candidateLabels=candidateLabels.filter(function(s){
+          return s.y >= (minDataY - margin) && s.y <= (maxDataY + margin);
+        });
+
+        log('    Type B: '+candidateLabels.length+' labels, '+dataRowCount+' data rows');
+
+        var rowLabels=new Array(dataRowCount);
+        for(var dr=0;dr<dataRowCount;dr++) rowLabels[dr]=null;
+
+        if(candidateLabels.length===dataRowCount){
+          for(var dr=0;dr<dataRowCount;dr++) rowLabels[dr]=candidateLabels[dr].text;
+        } else {
+          var usedRows=new Set();
+          for(var li=0;li<candidateLabels.length;li++){
+            var bestDist=Infinity, bestRow=-1;
+            for(var dr=0;dr<dataRowCount;dr++){
+              if(usedRows.has(dr)) continue;
+              var dist=Math.abs(candidateLabels[li].y-dataRowYs[dr]);
+              if(dist<bestDist){bestDist=dist;bestRow=dr}
+            }
+            if(bestRow>=0 && bestDist<margin*2){
+              usedRows.add(bestRow);
+              rowLabels[bestRow]=candidateLabels[li].text;
+            }
+          }
+        }
+
+        for(var dr=0;dr<dataRowCount;dr++){
+          var rowLabel=rowLabels[dr];
+          if(!rowLabel) continue;
+          var cleanLabel=rowLabel.replace(/[\s\u00a0]+/g,' ').replace(/\*+$/,'').trim();
+          // Strip trailing percentage from labels like "Strongly 69%" → "Strongly"
+          cleanLabel=cleanLabel.replace(/\s+\d+%$/,'').trim();
+          var row=tbl.rows[pptHeaderCount+dr];
+
+          for(var vc=0;vc<row.length;vc++){
+            var cellText=row[vc].trim();
+            if(!cellText) continue;
+            var numMatch=cellText.match(/^([+-]?\d+\.?\d*)\s*%?$/);
+            if(!numMatch) continue;
+            var pptNum=Math.round(parseFloat(numMatch[1]));
+            var colName=colHeaders[vc]||('col '+(vc+1));
+            // On audience profile slides, ALL values are Overall column
+            if(isAudienceProfile) colName='Overall';
+            // For 2-column label/value tables (demographics), treat value column as Overall
+            var isNumericCol2=/^\d+%?(\s+\d+%?)*$/.test(colName.trim());
+            if(isNumericCol2){
+              if(row.length===2) colName='Overall';
+              else if(!isAudienceProfile) continue;
+            }
+
+            var _sheetHint2=null, _mc2=0; for(var _sk2 in slideSheetCounts){if(slideSheetCounts[_sk2]>_mc2){_mc2=slideSheetCounts[_sk2];_sheetHint2=_sk2}}
+            var result=findBestMatch(_activeLabelIndex, cleanLabel, colName, pptNum, slide.slideNum, ti, _sheetHint2, colHeaders, slideContextText, colGroup[vc]||'');
+            if(result){
+              // Attach PPT table structure to trace
+              if(result._trace && !result._trace.pptTableHeaders){
+                result._trace.pptTableHeaders=colHeaders.slice(0);
+                result._trace.pptGroupHeaders=[];
+                for(var _gh=0;_gh<colHeaders.length;_gh++) result._trace.pptGroupHeaders.push(colGroup[_gh]||'');
+              }
+              nr.push(result); if(result.sheet&&result.sheet!=='?') slideSheetCounts[result.sheet]=(slideSheetCounts[result.sheet]||0)+1;
+            }
+          }
+        }
+      }
+      // Post-validation: if merged table produced no matches, discard unreliable results
+      if(_mergedStart>=0 && nr.length>_mergedStart){
+        var mResults=nr.slice(_mergedStart);
+        var hasAnyMatch=mResults.some(function(r){return r.status==='MATCH'});
+        if(!hasAnyMatch){
+          log('    ⏭ Merged table: no matches found — discarding '+mResults.length+' results');
+          nr.length=_mergedStart;
+          skippedItems.push({slide:String(slide.slideNum),label:'(merged chart table)',reason:'No matches after merge — likely different data source',table:ti+1});
+        }
+      }
+      // Restore banner globals if swapped
+      if(_activeBanner===2){
+        sheetsData=_origSheetsData; sheetNames=_origSheetNames; sheetQuestionText=_origSheetQText; sheetQuestionNum=_origSheetQNum;
+      }
+    }
+
+    // ─── CHART-BASED CHECKING ───
+    // Charts don't have column headers, so we can't reliably match values
+    // Skip chart checking to avoid false matches
+  }
+
+  results=nr;
+  renderResults();
+  var m=nr.filter(function(r){return r.status==='MATCH'}).length;
+  var e=nr.filter(function(r){return r.status==='ERROR'}).length;
+  var rd=nr.filter(function(r){return r.status==='ROUNDING'}).length;
+  var nf=nr.filter(function(r){return r.status==='NOT FOUND'}).length;
+  var denom=nr.length-nf;
+  var acc=denom>0?((m/denom)*100).toFixed(1):'N/A';
+
+  // Capture run snapshot for history
+  var runAliases={};
+  for(var ak in userAliases.labels) runAliases[ak]=userAliases.labels[ak];
+  for(var ak in userAliases.columns) runAliases[ak]=userAliases.columns[ak];
+  userAliases.skipLabels.forEach(function(s){runAliases['skip:'+s]=true});
+  
+  var snapshot={
+    runNumber:runHistory.length+1,
+    timestamp:new Date().toLocaleTimeString(),
+    total:nr.length, matches:m, errors:e, notFound:nf, skipped:skippedItems.length,
+    accuracy:acc,
+    aliasesActive:JSON.parse(JSON.stringify(runAliases)),
+    // Capture what changed from previous run
+    errorLabels:nr.filter(function(r){return r.status==='ERROR'}).map(function(r){return {slide:r.slide,label:r.label,col:r.column,diff:r.diff,sheet:r.sheet}}).slice(0,30),
+    notFoundLabels:nr.filter(function(r){return r.status==='NOT FOUND'}).map(function(r){return {slide:r.slide,label:r.label,col:r.column}}).slice(0,30)
+  };
+  
+  // Compute delta from previous run
+  if(runHistory.length>0){
+    var prev=runHistory[runHistory.length-1];
+    snapshot.delta={
+      matches:m-prev.matches,
+      errors:e-prev.errors,
+      notFound:nf-prev.notFound,
+      accuracy:(parseFloat(acc)-parseFloat(prev.accuracy)).toFixed(1)
+    };
+    // Find which NOT FOUNDs were resolved
+    var prevNF=prev.notFoundLabels.map(function(n){return n.slide+'|'+n.label+'|'+n.col});
+    var curNF=snapshot.notFoundLabels.map(function(n){return n.slide+'|'+n.label+'|'+n.col});
+    snapshot.resolvedNotFound=prevNF.filter(function(p){return curNF.indexOf(p)===-1}).length;
+    // Find which errors were resolved
+    var prevErr=prev.errorLabels.map(function(e){return e.slide+'|'+e.label+'|'+e.col});
+    var curErr=snapshot.errorLabels.map(function(e){return e.slide+'|'+e.label+'|'+e.col});
+    snapshot.resolvedErrors=prevErr.filter(function(p){return curErr.indexOf(p)===-1}).length;
+    snapshot.newErrors=curErr.filter(function(c){return prevErr.indexOf(c)===-1}).length;
+  }
+  
+  runHistory.push(snapshot);
+
+  stat.textContent='Done! '+nr.length+' checks: '+m+' match, '+e+' errors, '+rd+' rounding, '+nf+' not found';
+  fill.style.width='100%';
+  log('\n✅ Scan complete: '+nr.length+' total checks, '+skippedItems.length+' skipped');
+  if(snapshot.delta){
+    log('📊 vs previous run: '+snapshot.delta.matches+' matches, '+snapshot.delta.errors+' errors, '+snapshot.delta.notFound+' not found, accuracy '+(parseFloat(snapshot.delta.accuracy)>=0?'+':'')+snapshot.delta.accuracy+'%');
+    if(snapshot.resolvedNotFound>0) log('   ✅ Resolved '+snapshot.resolvedNotFound+' not-found items');
+    if(snapshot.resolvedErrors>0) log('   ✅ Resolved '+snapshot.resolvedErrors+' errors');
+    if(snapshot.newErrors>0) log('   ⚠️ '+snapshot.newErrors+' new errors');
+  }
+}
+
+function findBestMatch(labelIndex, pptLabel, pptColHeader, pptNum, slideNum, tableIdx, slideSheetHint, siblingCols, slideContextText, groupHint){
+  var key=norm(pptLabel);
+  // Skip PPT-only calculated labels and date/wave labels
+  var skipLabels=['net change','change','net'];
+  if(skipLabels.indexOf(key)!==-1 || userAliases.skipLabels.indexOf(key)!==-1){
+    skippedItems.push({slide:String(slideNum),label:pptLabel,reason:'Calculated label ('+key+')',table:tableIdx+1});
+    return null;
+  }
+  if(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{2,4}$/.test(key)){
+    skippedItems.push({slide:String(slideNum),label:pptLabel,reason:'Date/wave label',table:tableIdx+1});
+    return null;
+  }
+  // Skip "Even" and "NA" and pure text-number combos like "6% 2% 6% 12%"
+  if(key==='even'||key==='na'||key==='n/a') return null;
+
+  var sources=labelIndex[key]?labelIndex[key].slice():null;
+  var sourceMethod={};  // track per-source: 'exact' or 'fuzzy'
+
+  // Label aliases: abbreviated PPT labels → banner label keywords
+  // When PPT uses a short label, search for banner rows containing that keyword
+  if(!sources || sources.length===0){
+    var labelAliasKeywords=null;
+    // Map abbreviated labels to keywords that appear in the full banner label
+    var labelAliasMap={
+      // Project-specific label matches get added via Match Helper
+      // and learned automatically for future scans
+    };
+    if(labelAliasMap[key]) labelAliasKeywords=labelAliasMap[key];
+    // Manual label aliases take priority
+    if(userAliases.labels[key]) labelAliasKeywords=userAliases.labels[key];
+    if(labelAliasKeywords){
+      if(!sources) sources=[];
+      var aliasKeys=Object.keys(labelIndex);
+      for(var aki=0;aki<aliasKeys.length;aki++){
+        var ak=aliasKeys[aki];
+        if(ak.indexOf(labelAliasKeywords)!==-1){
+          for(var ali=0;ali<labelIndex[ak].length;ali++){
+            var aliSrc=labelIndex[ak][ali];
+            var aliKey=aliSrc.sheet+'_'+aliSrc.rowIdx;
+            if(!sourceMethod[aliKey]){
+              sources.push(aliSrc);
+              sourceMethod[aliKey]='alias';
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // For interchangeable labels, merge sources from all equivalent keys
+  var dkEquiv=['dk/refused','dkrefused','dont know/refused','dont knowrefused','not sure','undecided','dont know'];
+  if(dkEquiv.indexOf(key)!==-1){
+    if(!sources) sources=[];
+    for(var di=0;di<dkEquiv.length;di++){
+      if(dkEquiv[di]!==key && labelIndex[dkEquiv[di]]){
+        for(var ei=0;ei<labelIndex[dkEquiv[di]].length;ei++){
+          sources.push(labelIndex[dkEquiv[di]][ei]);
+        }
+      }
+    }
+    if(sources.length===0) sources=null;
+  }
+
+  // Tag exact sources
+  if(sources){
+    for(var si=0;si<sources.length;si++){sourceMethod[sources[si].sheet+'_'+sources[si].rowIdx]='exact'}
+  }
+
+  // Also try fuzzy matches (always, even if exact key found)
+  var seenSheetRows={};
+  if(sources){
+    for(var si=0;si<sources.length;si++){seenSheetRows[sources[si].sheet+'_'+sources[si].rowIdx]=1}
+  } else {
+    sources=[];
+  }
+  var labelKeys=Object.keys(labelIndex).sort();
+  for(var ki=0;ki<labelKeys.length;ki++){
+    var k=labelKeys[ki];
+    if(k===key) continue;
+    if(labelsMatch(pptLabel, labelIndex[k][0].label)){
+      for(var fi=0;fi<labelIndex[k].length;fi++){
+        var fk=labelIndex[k][fi].sheet+'_'+labelIndex[k][fi].rowIdx;
+        if(!seenSheetRows[fk]){
+          seenSheetRows[fk]=1;
+          sources.push(labelIndex[k][fi]);
+          sourceMethod[fk]='fuzzy';
+        }
+      }
+    }
+  }
+  if(!sources.length){
+    var r={slide:String(slideNum),sheet:'?',label:pptLabel,column:pptColHeader,pptValue:String(pptNum),
+      excelValue:null,diff:null,status:'NOT FOUND',debug:'Label "'+pptLabel+'" not in any sheet'};
+    r.confidence=getConfidence(r,'none');
+    return r;
+  }
+
+  // Try intersection match first (PPT col header → Excel col header)
+  var allMatches=[], bestRounding=null, bestError=null;
+  // Build diagnostic trace for this check
+  var _trace={
+    pptLabel:pptLabel, pptCol:pptColHeader, pptValue:pptNum,
+    groupHint:groupHint||'',
+    labelKey:key,
+    sourceSummary:sources.map(function(s){return {sheet:s.sheet,row:s.rowIdx,label:s.label,method:sourceMethod[s.sheet+'_'+s.rowIdx]||'?'}}).slice(0,8),
+    candidates:[],
+    aliasesFired:[]
+  };
+  // Check which aliases fired
+  if(userAliases.labels[key]) _trace.aliasesFired.push('label: "'+key+'" → "'+userAliases.labels[key]+'"');
+  if(userAliases.columns[norm(pptColHeader)]) _trace.aliasesFired.push('column: "'+norm(pptColHeader)+'" → "'+userAliases.columns[norm(pptColHeader)]+'"');
+
+  for(var si=0;si<sources.length;si++){
+    var src=sources[si];
+    var srcKey=src.sheet+'_'+src.rowIdx;
+    var srcMethod=sourceMethod[srcKey]||'fuzzy';
+    var colResult=findExcelColumnWithScore(src.sheet, pptColHeader, siblingCols, groupHint);
+    var colIdx=colResult.col;
+    var colScore=colResult.score;
+    if(colIdx<0){continue}
+    var excelRaw=getExcelValue(src.sheet, src.rowIdx, colIdx);
+    if(excelRaw===null){continue}
+    var cmp=compareValues(pptNum, excelRaw, colIdx);
+    var result={slide:String(slideNum),sheet:src.sheet,label:src.label,column:pptColHeader,
+      pptValue:String(pptNum),excelValue:cmp.excelValue,diff:cmp.diff,status:cmp.status,
+      debug:'sheet '+src.sheet+' col '+(colIdx+1)+' "'+getExcelHeaders(src.sheet)[colIdx]+'" '+cmp.interp+' raw='+excelRaw+'→'+cmp.excelValue};
+    result.confidence=getConfidence(result, srcMethod, colScore);
+    result._srcMethod=srcMethod; result._colScore=colScore;
+    // Trace: record this candidate
+    _trace.candidates.push({sheet:src.sheet,row:src.rowIdx,label:src.label,
+      colIdx:colIdx+1,colHeader:getExcelHeaders(src.sheet)[colIdx]||'',colScore:colScore,
+      method:srcMethod,excelVal:cmp.excelValue,diff:cmp.diff,status:cmp.status});
+    if(cmp.status==='MATCH') allMatches.push(result);
+    if(cmp.status==='ROUNDING') {if(!bestRounding||cmp.diff<bestRounding.diff) bestRounding=result;}
+    if(cmp.status==='ERROR') {
+      if(!bestError||cmp.diff<bestError.diff) bestError=result;
+      // Also track: if question text strongly matches this sheet, prefer it even with bigger diff
+      if(slideContextText&&cmp.diff<=bestError.diff+10){
+        var qScore=scoreQuestionMatch(src.sheet, slideContextText);
+        if(qScore>50){
+          var bestQScore=scoreQuestionMatch(bestError.sheet, slideContextText);
+          if(qScore>bestQScore+20) bestError=result;
+        }
+      }
+    }
+  }
+  if(allMatches.length===1) { allMatches[0]._trace=_trace; return allMatches[0]; }
+  if(allMatches.length>1){
+    // Pick best match using: exact label > fuzzy, higher col score, sheet affinity, question text
+    var hintSheet=slideSheetHint?slideSheetHint:null;
+    var best=allMatches[0];
+    for(var mi=1;mi<allMatches.length;mi++){
+      var m=allMatches[mi];
+      // Prefer exact label over fuzzy
+      if(m._srcMethod==='exact' && best._srcMethod!=='exact'){best=m;continue}
+      if(best._srcMethod==='exact' && m._srcMethod!=='exact') continue;
+      // Prefer higher column score
+      if((m._colScore||0)>(best._colScore||0)+10){best=m;continue}
+      if((best._colScore||0)>(m._colScore||0)+10) continue;
+      // Prefer sheet with better question text match to slide context
+      if(slideContextText){
+        var mQScore=scoreQuestionMatch(m.sheet, slideContextText);
+        var bQScore=scoreQuestionMatch(best.sheet, slideContextText);
+        if(mQScore>bQScore+15){best=m;continue}
+        if(bQScore>mQScore+15) continue;
+      }
+      // Prefer sheet affinity (matching what other cells on this slide use)
+      if(hintSheet && m.sheet===hintSheet && best.sheet!==hintSheet){best=m;continue}
+    }
+    best._trace=_trace; return best;
+  }
+  if(bestRounding) { bestRounding._trace=_trace; return bestRounding; }
+  if(bestError){
+    // FEATURE: Parent label fallback — when child label matches but values don't,
+    // check if an adjacent row (parent/summary row) has the correct value
+    if(bestError.diff>=5){
+      var codeColIdx2=(parseInt(document.getElementById('codeCol').value)||1)-1;
+      var labelColIdx2=(parseInt(document.getElementById('labelCol').value)||2)-1;
+      var data=sheetsData[bestError.sheet];
+      if(data){
+        var matchedSrc=sources.find(function(s){return s.sheet===bestError.sheet});
+        if(matchedSrc){
+          var colResult2=findExcelColumnWithScore(bestError.sheet, pptColHeader, siblingCols, groupHint);
+          var colIdx2=colResult2.col;
+          if(colIdx2>=0){
+            // Check rows above and below the matched row (±1 to ±3)
+            for(var offset=-6;offset<=6;offset++){
+              if(offset===0) continue;
+              var adjRow=matchedSrc.rowIdx+offset;
+              if(adjRow<0||adjRow>=data.length) continue;
+              var adjCode=data[adjRow][codeColIdx2];
+              if((typeof adjCode==='number'?adjCode:parseInt(adjCode,10))!==3) continue;
+              var adjVal=getExcelValue(bestError.sheet, adjRow, colIdx2);
+              if(adjVal===null) continue;
+              var adjCmp=compareValues(pptNum, adjVal, colIdx2);
+              if(adjCmp.status==='MATCH'||adjCmp.diff<=1){
+                var adjLabel=String(data[adjRow][labelColIdx2]||'').trim();
+                var result={slide:String(slideNum),sheet:bestError.sheet,label:adjLabel,column:pptColHeader,
+                  pptValue:String(pptNum),excelValue:adjCmp.excelValue,diff:adjCmp.diff,status:adjCmp.diff===0?'MATCH':'ERROR',
+                  debug:'PARENT: PPT label "'+pptLabel+'" → data matches "'+adjLabel+'" (row '+(offset>0?'+':'')+offset+') in sheet '+bestError.sheet+' col '+(colIdx2+1)};
+                result.confidence={level:'MED',reason:'parent label fallback, PPT says "'+pptLabel+'"'};
+                result._trace=_trace;
+                return result;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // FEATURE: Smart error classification — check if the PPT value exists
+    // anywhere in the banners for this label
+    var pptVal=parseInt(bestError.pptValue);
+    var valueExistsAnywhere=false;
+    for(var si2=0;si2<sources.length&&!valueExistsAnywhere;si2++){
+      var srcData=sheetsData[sources[si2].sheet];
+      if(!srcData||!srcData[sources[si2].rowIdx]) continue;
+      var srcRow=srcData[sources[si2].rowIdx];
+      for(var ci2=4;ci2<srcRow.length;ci2++){
+        var cv=srcRow[ci2];
+        if(cv===null||cv===undefined) continue;
+        var rvCheck=typeof cv==='number'?(Math.abs(cv)<1?Math.round(cv*100):Math.round(cv)):null;
+        if(rvCheck===pptVal){valueExistsAnywhere=true;break}
+      }
+    }
+    if(!valueExistsAnywhere && bestError.diff>=3){
+      bestError.debug+=' [VALUE NOT IN BANNERS]';
+    }
+    bestError._trace=_trace;
+    return bestError;
+  }
+
+  var r={slide:String(slideNum),sheet:sources[0].sheet,label:sources[0].label,column:pptColHeader,
+    pptValue:String(pptNum),excelValue:null,diff:null,status:'NOT FOUND',
+    debug:'Col "'+pptColHeader+'" not matched in sheet '+sources[0].sheet};
+  r.confidence=getConfidence(r,'none');
+  r._trace=_trace;
+  return r;
+}
+
+function blindScanSheets(sources, pptNum){
+  var best=null;
+  for(var si=0;si<sources.length;si++){
+    var src=sources[si];
+    var data=sheetsData[src.sheet]; if(!data) continue;
+    var row=data[src.rowIdx]; if(!row) continue;
+    for(var ci=2;ci<row.length;ci++){
+      var raw=row[ci];
+      if(raw===undefined||raw===null||raw==='') continue;
+      if(typeof raw==='string'&&raw==='0.0'){raw=0}
+      var num=typeof raw==='number'?raw:parseFloat(raw);
+      if(isNaN(num)) continue;
+      var aD=Math.floor(num*100+0.5),aR=Math.floor(num+0.5);
+      var dD=Math.abs(pptNum-aD),dR=Math.abs(pptNum-aR);
+      var diff,rounded,interp;
+      if(dD<=dR){diff=dD;rounded=aD;interp='dec'}else{diff=dR;rounded=aR;interp='raw'}
+      if(diff<=1){
+        var headers=getExcelHeaders(src.sheet);
+        var ch=headers[ci]||'';
+        var candidate={sheet:src.sheet,label:src.label,excelValue:rounded,diff:diff,
+          status:diff===0?'MATCH':'ERROR',
+          debug:'col '+(ci+1)+(ch?' "'+ch+'"':'')+' '+interp+' raw='+num+'→'+rounded+' [BLIND]'};
+        if(diff===0) return candidate;
+        if(!best) best=candidate;
+      }
+    }
+  }
+  return best;
+}
+
+/* ─── RENDER RESULTS ─── */
+function renderResults(){
+  if(!results.length&&!skippedItems.length){document.getElementById('resultsDashboard').classList.add('hidden');document.getElementById('clearBtn').classList.add('hidden');document.getElementById('exportBtn').classList.add('hidden');return}
+  document.getElementById('resultsDashboard').classList.remove('hidden');document.getElementById('clearBtn').classList.remove('hidden');document.getElementById('exportBtn').classList.remove('hidden');
+  document.getElementById('aliasPanel').classList.remove('hidden');
+  var total=results.length;
+  var match=results.filter(function(r){return r.status==='MATCH'}).length;
+  var errors=results.filter(function(r){return r.status==='ERROR'}).length;
+  var rounding=results.filter(function(r){return r.status==='ROUNDING'}).length;
+  var notFound=results.filter(function(r){return r.status==='NOT FOUND'}).length;
+  var denominator=total-notFound;
+  var accuracy=denominator>0?((match/denominator)*100).toFixed(1):'—';
+  var exactAccuracy=denominator>0?((match/denominator)*100).toFixed(1):'—';
+  var accColor=accuracy==='—'?'var(--muted)':parseFloat(accuracy)>=99?'var(--green)':parseFloat(accuracy)>=95?'var(--yellow)':'var(--red)';
+
+  // Count low-confidence results
+  var lowConf=results.filter(function(r){return r.confidence&&r.confidence.level==='LOW'&&r.status!=='NOT FOUND'}).length;
+
+  document.getElementById('statsGrid').innerHTML=
+    statHTML('Total',total,'var(--text)','')+
+    statHTML('Match',match,'var(--green)','var(--green-bg)')+
+    statHTML('Errors',errors,'var(--red)','var(--red-bg)')+
+    statHTML('Not Found',notFound,'var(--gray)','var(--gray-bg)')+
+    statHTML('Skipped',skippedItems.length,'var(--blue)','var(--blue-bg)')+
+    statHTML('Accuracy',accuracy==='—'?'—':accuracy+'%',accColor,'');
+
+  // Build per-slide diagnostic summary
+  var errorList=results.filter(function(r){return r.status==='ERROR'});
+  var slideDiag={};
+  errorList.forEach(function(r){
+    var s=r.slide;
+    if(!slideDiag[s]) slideDiag[s]={errors:[],parentMatches:0,valueNotInBanners:0,totalOnSlide:0,matchesOnSlide:0};
+    slideDiag[s].errors.push(r);
+    if(r.debug&&r.debug.indexOf('VALUE NOT IN BANNERS')!==-1) slideDiag[s].valueNotInBanners++;
+  });
+  results.forEach(function(r){
+    var s=r.slide;
+    if(!slideDiag[s]) return;
+    slideDiag[s].totalOnSlide++;
+    if(r.status==='MATCH') slideDiag[s].matchesOnSlide++;
+    if(r.debug&&r.debug.indexOf('PARENT:')!==-1) slideDiag[s].parentMatches++;
+  });
+
+  var diagHTML='';
+  for(var s in slideDiag){
+    var d=slideDiag[s];
+    if(!d.errors.length) continue;
+    var labels={}, sheets={}, columns={}, diffs=[];
+    d.errors.forEach(function(e){
+      labels[e.label]=(labels[e.label]||0)+1;
+      sheets[e.sheet]=(sheets[e.sheet]||0)+1;
+      columns[e.column]=(columns[e.column]||0)+1;
+      diffs.push(parseInt(e.diff)||0);
+    });
+    var labelList=Object.keys(labels);
+    var sheetList=Object.keys(sheets);
+    var colList=Object.keys(columns);
+    var icon='', msg='';
+
+    // Build a pattern-focused message
+    // Find what's common across errors: same column? same label? same sheet?
+    var parts=[];
+
+    // Classify the error pattern
+    if(d.valueNotInBanners>d.errors.length*0.5){
+      icon='🔍';
+      parts.push('<b>Different data source</b> — '+d.valueNotInBanners+' of '+d.errors.length+' values not found anywhere in banners');
+    } else if(d.parentMatches>0 && d.errors.length>0){
+      icon='🏷️';
+      parts.push('<b>Label mismatch</b> — PPT shows sub-labels but data is from parent/summary rows');
+    } else {
+      icon='📊';
+    }
+
+    // What columns are affected?
+    if(colList.length===1){
+      parts.push('All errors in <b>'+esc(colList[0])+'</b> column');
+    } else if(colList.length<=3 && d.errors.length>1){
+      parts.push('Affected columns: <b>'+colList.map(function(c){return esc(c)}).join('</b>, <b>')+'</b>');
+    }
+
+    // What labels?
+    if(labelList.length===1 && d.errors.length>1){
+      parts.push('All on label "<b>'+esc(labelList[0])+'</b>"');
+    } else if(labelList.length<=3 && labelList.length<d.errors.length){
+      parts.push('Labels: '+labelList.map(function(l){return '"'+esc(l)+'"'}).join(', '));
+    }
+
+    // What sheets?
+    if(sheetList.length===1){
+      var qn=sheetQuestionNum[sheetList[0]];
+      parts.push('Sheet '+sheetList[0]+(qn?' ('+qn+')':''));
+    } else if(sheetList.length<=3){
+      var sheetParts=sheetList.map(function(sn){
+        var qn=sheetQuestionNum[sn];
+        return sn+(qn?' ('+qn+')':'');
+      });
+      parts.push('Sheets: '+sheetParts.join(', '));
+    }
+
+    // If no specific patterns found, give a generic summary
+    if(!parts.length){
+      parts.push(d.errors.length+' mismatch'+(d.errors.length>1?'es':''));
+    }
+
+    msg=parts.join(' · ');
+    diagHTML+='<div style="background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:10px 14px;margin-bottom:6px;font-size:12px;line-height:1.5">'
+      +'<span style="font-size:14px">'+icon+'</span> <b style="color:#ccc">Slide '+s+'</b> '
+      +'<span style="color:#888">('+d.errors.length+' error'+(d.errors.length>1?'s':'')+', '
+      +d.matchesOnSlide+'/'+d.totalOnSlide+' checks passed)</span>'
+      +'<div style="color:#aaa;margin-top:4px">'+msg+'</div></div>';
+  }
+
+  document.getElementById('errorsTableWrapper').innerHTML=diagHTML+buildResultsTable('Errors',errorList,true);
+  document.getElementById('roundingTableWrapper').innerHTML='';
+  document.getElementById('notFoundTableWrapper').innerHTML=buildResultsTable('Not Found',results.filter(function(r){return r.status==='NOT FOUND'}),false);
+  document.getElementById('skippedTableWrapper').innerHTML=buildSkippedTable();
+  document.getElementById('allChecksTableWrapper').innerHTML=buildResultsTable('All Checks',results,false);
+
+  document.querySelectorAll('.table-header').forEach(function(el){
+    el.onclick=function(){var b=el.nextElementSibling;var a=el.querySelector('.arrow');
+      if(b.classList.contains('hidden')){b.classList.remove('hidden');a.textContent='▲'}
+      else{b.classList.add('hidden');a.textContent='▼'}}});
+}
+
+function statHTML(label,value,color,bg){
+  return '<div class="stat-box" style="border-left-color:'+color+';'+(bg?'background:'+bg:'')+'"><div class="stat-label">'+label+'</div><div class="stat-value" style="color:'+color+'">'+value+'</div></div>';
+}
+
+function confBadge(conf){
+  if(!conf) return '';
+  var c=conf.level==='HIGH'?'var(--green)':conf.level==='MED'?'var(--yellow)':'var(--red)';
+  var bg=conf.level==='HIGH'?'var(--green-bg)':conf.level==='MED'?'var(--yellow-bg)':'var(--red-bg)';
+  return '<span class="conf-badge" style="color:'+c+';background:'+bg+'" title="'+esc(conf.reason)+'">'+conf.level+'</span>';
+}
+
+function buildResultsTable(title,rows,defaultOpen){
+  if(!rows||!rows.length) return '';
+  var headers=['Slide','Sheet','Label','Column','PPT','Excel','Diff','Status','Conf','Flag','Debug'];
+  var html='<div class="table-wrapper"><div class="table-header"><span class="table-title">'+title+' ('+rows.length+')</span><span class="arrow">'+(defaultOpen?'▲':'▼')+'</span></div><div style="overflow-x:auto;max-height:500px;overflow-y:auto"'+(defaultOpen?'':' class="hidden"')+'><table class="results-table"><thead><tr>';
+  headers.forEach(function(h){html+='<th>'+h+'</th>'});
+  html+='</tr></thead><tbody>';
+  rows.forEach(function(r,ri){
+    var sc=r.status==='ERROR'?'var(--red)':r.status==='ROUNDING'?'var(--yellow)':r.status==='NOT FOUND'?'var(--gray)':'var(--green)';
+    var bg=r.status==='ERROR'?'var(--red-bg)':r.status==='ROUNDING'?'var(--yellow-bg)':r.status==='NOT FOUND'?'var(--gray-bg)':'transparent';
+    var bb=r.status==='ERROR'?'var(--red-bg)':r.status==='ROUNDING'?'var(--yellow-bg)':r.status==='NOT FOUND'?'var(--gray-bg)':'var(--green-bg)';
+    var clickAttr='';
+    if(r.status==='NOT FOUND' && r.debug && r.debug.indexOf('Label')!==-1){
+      clickAttr=' style="cursor:pointer" title="Click to identify this label" onclick="addAliasFromResult(\'label\',\''+esc(String(r.label||'')).replace(/'/g,"\\'")+'\');"';
+    } else if(r.status==='NOT FOUND' && r.debug && r.debug.indexOf('Col')!==-1){
+      clickAttr=' style="cursor:pointer" title="Click to identify this column" onclick="addAliasFromResult(\'column\',\''+esc(String(r.column||'')).replace(/'/g,"\\'")+'\');"';
+    }
+    // Flag column — dropdown for errors/not-found
+    var flagId='flag_'+title.replace(/\s/g,'')+'_'+ri;
+    var flagHtml='';
+    if(r.status==='ERROR'||r.status==='NOT FOUND'){
+      flagHtml='<select id="'+flagId+'" onchange="flagResult(this,'+ri+',\''+title+'\')" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:10px;padding:1px 2px">'
+        +'<option value="">—</option>'
+        +'<option value="deck_error"'+(r._userFlag==='deck_error'?' selected':'')+'>Deck Error</option>'
+        +'<option value="wrong_match"'+(r._userFlag==='wrong_match'?' selected':'')+'>Wrong Match</option>'
+        +'<option value="ok"'+(r._userFlag==='ok'?' selected':'')+'>OK/Expected</option>'
+        +'</select>';
+    }
+    html+='<tr'+clickAttr+' style="background:'+bg+(clickAttr?';cursor:pointer':'')+'">'+'<td>'+esc(String(r.slide||''))+'</td><td style="color:var(--muted)">'+esc(String(r.sheet||''))+'</td><td class="cell-label" title="'+esc(String(r.label||''))+'">'+esc(String(r.label||''))+'</td><td style="color:var(--muted)">'+esc(String(r.column||''))+'</td><td class="cell-bold">'+esc(String(r.pptValue||''))+'</td><td class="cell-bold">'+(r.excelValue!=null?r.excelValue:'—')+'</td><td style="color:'+sc+';font-weight:700">'+(r.diff!=null?r.diff:'—')+'</td><td><span class="status-badge" style="color:'+sc+';background:'+bb+'">'+r.status+'</span></td><td>'+confBadge(r.confidence)+'</td><td>'+flagHtml+'</td><td style="color:var(--dim);font-size:10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(String(r.debug||''))+'">'+esc(String(r.debug||''))+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+
+function buildSkippedTable(){
+  if(!skippedItems.length) return '';
+  // Deduplicate by slide+label+reason
+  var seen={}, deduped=[];
+  for(var i=0;i<skippedItems.length;i++){
+    var k=skippedItems[i].slide+'|'+skippedItems[i].label+'|'+skippedItems[i].reason;
+    if(!seen[k]){seen[k]=1;deduped.push(skippedItems[i])}
+  }
+  var html='<div class="table-wrapper"><div class="table-header"><span class="table-title">Skipped ('+deduped.length+')</span><span class="arrow">▼</span></div><div class="hidden" style="overflow-x:auto;max-height:300px;overflow-y:auto"><table class="results-table"><thead><tr><th>Slide</th><th>Label</th><th>Reason</th></tr></thead><tbody>';
+  deduped.forEach(function(s){
+    html+='<tr style="background:var(--blue-bg)"><td>'+esc(s.slide)+'</td><td class="cell-label">'+esc(s.label)+'</td><td style="color:var(--blue)">'+esc(s.reason)+'</td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+
+function clearResults(){results=[];skippedItems=[];runHistory=[];renderResults();document.getElementById('scanLog').classList.add('hidden')}
+
+// ─── USER ALIASES ───
+var userAliases={labels:{},columns:{},skipLabels:[]};
+
+function addAlias(type){
+  document.getElementById('aliasPanel').classList.remove('hidden');
+  var container=document.getElementById('aliasRows');
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';
+  var id='ovr_'+Date.now()+'_'+Math.random().toString(36).substr(2,4);
+  if(type==='label'){
+    row.innerHTML='<span style="color:var(--yellow);font-size:11px;width:60px">LABEL</span>'
+      +'<input id="'+id+'_from" placeholder="PPT label" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<span style="color:var(--dim)">→</span>'
+      +'<input id="'+id+'_to" placeholder="Excel label (keyword)" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+    row.dataset.type='label'; row.dataset.id=id;
+  } else if(type==='column'){
+    row.innerHTML='<span style="color:var(--blue);font-size:11px;width:60px">COLUMN</span>'
+      +'<input id="'+id+'_from" placeholder="PPT col header" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<span style="color:var(--dim)">→</span>'
+      +'<input id="'+id+'_to" placeholder="Excel col header" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+    row.dataset.type='column'; row.dataset.id=id;
+  } else if(type==='skip'){
+    row.innerHTML='<span style="color:var(--gray);font-size:11px;width:60px">SKIP</span>'
+      +'<input id="'+id+'_from" placeholder="Label to skip" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+    row.dataset.type='skip'; row.dataset.id=id;
+  }
+  container.appendChild(row);
+}
+
+function collectAliases(){
+  userAliases={labels:{},columns:{},skipLabels:[]};
+  var rows=document.getElementById('aliasRows').children;
+  for(var i=0;i<rows.length;i++){
+    var row=rows[i];
+    var type=row.dataset.type;
+    var id=row.dataset.id;
+    var from=(document.getElementById(id+'_from')||{}).value||'';
+    var to=(document.getElementById(id+'_to')||{}).value||'';
+    if(!from.trim()) continue;
+    var fromN=norm(from.trim());
+    if(type==='label' && to.trim()){
+      userAliases.labels[fromN]=to.trim().toLowerCase();
+    } else if(type==='column' && to.trim()){
+      userAliases.columns[fromN]=to.trim().toLowerCase();
+    } else if(type==='skip'){
+      userAliases.skipLabels.push(fromN);
+    }
+  }
+}
+
+function rerunWithAliases(){
+  collectAliases();
+  var count=Object.keys(userAliases.labels).length+Object.keys(userAliases.columns).length+userAliases.skipLabels.length;
+  if(count>0){
+    log('\n🔧 Applying '+count+' alias'+(count>1?'s':''));
+    for(var k in userAliases.labels) log('  Label: "'+k+'" → "'+userAliases.labels[k]+'"');
+    for(var k in userAliases.columns) log('  Column: "'+k+'" → "'+userAliases.columns[k]+'"');
+    userAliases.skipLabels.forEach(function(s){log('  Skip: "'+s+'"')});
+  }
+  // Save aliases to learned storage
+  saveLearnedAliases();
+  window._scanConfirmed=true; // skip confirmation on rerun
+  runFullScan();
+}
+
+// ─── LEARNED ALIASES (localStorage persistence) ───
+var LEARNED_KEY='deckChecker_learnedAliases';
+
+function loadLearnedAliases(){
+  try {
+    var stored=localStorage.getItem(LEARNED_KEY);
+    if(stored){
+      var data=JSON.parse(stored);
+      if(data.labels) for(var k in data.labels) userAliases.labels[k]=data.labels[k];
+      if(data.columns) for(var k in data.columns) userAliases.columns[k]=data.columns[k];
+      if(data.skipLabels) data.skipLabels.forEach(function(s){ if(userAliases.skipLabels.indexOf(s)===-1) userAliases.skipLabels.push(s) });
+      renderLearnedBadge();
+    }
+  } catch(e){ /* localStorage unavailable */ }
+}
+
+function saveLearnedAliases(){
+  try {
+    // Merge current aliases with previously learned ones
+    var existing={labels:{},columns:{},skipLabels:[]};
+    try {
+      var stored=localStorage.getItem(LEARNED_KEY);
+      if(stored) existing=JSON.parse(stored);
+    } catch(e){}
+    for(var k in userAliases.labels) existing.labels[k]=userAliases.labels[k];
+    for(var k in userAliases.columns) existing.columns[k]=userAliases.columns[k];
+    userAliases.skipLabels.forEach(function(s){ if(existing.skipLabels.indexOf(s)===-1) existing.skipLabels.push(s) });
+    localStorage.setItem(LEARNED_KEY, JSON.stringify(existing));
+    renderLearnedBadge();
+  } catch(e){ /* localStorage unavailable */ }
+}
+
+function renderLearnedBadge(){
+  try {
+    var stored=localStorage.getItem(LEARNED_KEY);
+    if(!stored) return;
+    var data=JSON.parse(stored);
+    var total=(Object.keys(data.labels||{}).length)+(Object.keys(data.columns||{}).length)+(data.skipLabels||[]).length;
+    var badge=document.getElementById('learnedBadge');
+    if(!badge) return;
+    if(total>0){
+      badge.textContent='🧠 '+total+' learned match'+(total>1?'es':'');
+      badge.style.display='inline-block';
+      badge.title='Click to view/manage learned matches';
+    } else {
+      badge.style.display='none';
+    }
+  } catch(e){}
+}
+
+function showLearnedAliases(){
+  try {
+    var stored=localStorage.getItem(LEARNED_KEY);
+    if(!stored){alert('No learned matches yet.');return}
+    var data=JSON.parse(stored);
+    var lines=[];
+    lines.push('=== LEARNED LABEL MATCHES ===');
+    for(var k in (data.labels||{})) lines.push('  "'+k+'" → "'+data.labels[k]+'"');
+    if(!Object.keys(data.labels||{}).length) lines.push('  (none)');
+    lines.push('\n=== LEARNED COLUMN MATCHES ===');
+    for(var k in (data.columns||{})) lines.push('  "'+k+'" → "'+data.columns[k]+'"');
+    if(!Object.keys(data.columns||{}).length) lines.push('  (none)');
+    lines.push('\n=== LEARNED SKIP LABELS ===');
+    (data.skipLabels||[]).forEach(function(s){lines.push('  "'+s+'"')});
+    if(!(data.skipLabels||[]).length) lines.push('  (none)');
+    lines.push('\nThese apply automatically to all future scans.');
+    lines.push('To clear all learned matches, click Clear Learned.');
+    alert(lines.join('\n'));
+  } catch(e){alert('Could not read learned matches.')}
+}
+
+function clearLearnedAliases(){
+  if(!confirm('Clear all learned matches? This cannot be undone.')) return;
+  try { localStorage.removeItem(LEARNED_KEY); } catch(e){}
+  userAliases={labels:{},columns:{},skipLabels:[]};
+  document.getElementById('aliasRows').innerHTML='';
+  renderLearnedBadge();
+}
+
+// Load learned matches on page load
+try { loadLearnedAliases(); } catch(e){}
+
+// Flag result function — stores user classification on the result object
+function flagResult(sel,rowIdx,tableTitle){
+  var targetList;
+  if(tableTitle==='Errors') targetList=results.filter(function(r){return r.status==='ERROR'});
+  else if(tableTitle==='Not Found') targetList=results.filter(function(r){return r.status==='NOT FOUND'});
+  else targetList=results;
+  if(targetList[rowIdx]) targetList[rowIdx]._userFlag=sel.value;
+}
+
+function addAliasFromResult(type, value){
+  addAlias(type);
+  // Fill in the "from" field of the just-added row
+  var rows=document.getElementById('aliasRows').children;
+  var lastRow=rows[rows.length-1];
+  var id=lastRow.dataset.id;
+  var fromInput=document.getElementById(id+'_from');
+  if(fromInput) fromInput.value=value;
+  // Scroll to alias manager
+  document.getElementById('aliasPanel').scrollIntoView({behavior:'smooth',block:'center'});
+  // Focus the "to" field
+  var toInput=document.getElementById(id+'_to');
+  if(toInput) setTimeout(function(){toInput.focus()},100);
+}
+
+function exportReport(){
+  // Build a real .docx using JSZip (already loaded for PPTX parsing)
+  var total=results.length,match=results.filter(function(r){return r.status==='MATCH'}).length;
+  var errors=results.filter(function(r){return r.status==='ERROR'});
+  var notFoundList=results.filter(function(r){return r.status==='NOT FOUND'});
+  var denominator=total-notFoundList.length;
+  var accuracy=denominator>0?((match/denominator)*100).toFixed(1):'N/A';
+
+  function x(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+  function p(text,opts){
+    opts=opts||{};
+    var rpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="'+(opts.sz||20)+'"/>'+(opts.bold?'<w:b/>':'')+(opts.color?'<w:color w:val="'+opts.color+'"/>':'')+'</w:rPr>';
+    return '<w:p><w:pPr><w:spacing w:after="'+(opts.after||80)+'"/>'+rpr+'</w:pPr><w:r>'+rpr+'<w:t xml:space="preserve">'+x(text)+'</w:t></w:r></w:p>';
+  }
+  function tcell(text,w,opts){
+    opts=opts||{};
+    var rpr='<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="'+(opts.sz||16)+'"/>'+(opts.bold?'<w:b/>':'')+(opts.color?'<w:color w:val="'+opts.color+'"/>':'')+'</w:rPr>';
+    var shd=opts.shade?'<w:shd w:val="clear" w:fill="'+opts.shade+'"/>':'';
+    return '<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/>'+shd+'</w:tcPr><w:p><w:pPr>'+rpr+'</w:pPr><w:r>'+rpr+'<w:t xml:space="preserve">'+x(text)+'</w:t></w:r></w:p></w:tc>';
+  }
+  function trow(cells,widths,opts){
+    opts=opts||{};
+    var xml='<w:tr>';
+    cells.forEach(function(c,i){xml+=tcell(c,widths[i],opts)});
+    return xml+'</w:tr>';
+  }
+
+  var body='';
+  // Derive project name from PPT filename
+  var projectName=pptFileName.replace(/\.[^.]+$/,'').replace(/[_\-]+/g,' ').replace(/\s*\([^)]*\)\s*/g,'').trim();
+  body+=p(projectName+' — Deck Check Report',{sz:32,bold:true,after:120});
+  body+=p('PPT: '+pptFileName,{sz:20});
+  body+=p('Excel: '+excelFileName,{sz:20});
+  body+=p('Date: '+new Date().toLocaleDateString(),{sz:20,after:200});
+  body+=p('Total: '+total+'  |  Match: '+match+'  |  Errors: '+errors.length+'  |  Not Found: '+notFoundList.length+'  |  Skipped: '+skippedItems.length+'  |  Accuracy: '+accuracy+'%',{sz:22,bold:true,after:200});
+
+  // Run History — shows progression across re-checks
+  if(runHistory.length>1){
+    body+=p('Run History ('+runHistory.length+' runs)',{sz:26,bold:true,after:100});
+    body+=p('Shows how results improved across re-checks as matches were added.',{sz:16,after:80,color:'888888'});
+    
+    var hw=[600,1000,900,900,900,900,1000,4200];
+    var htw=hw.reduce(function(a,b){return a+b},0);
+    body+='<w:tbl><w:tblPr><w:tblW w:w="'+htw+'" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="999999"/><w:left w:val="single" w:sz="4" w:color="999999"/><w:bottom w:val="single" w:sz="4" w:color="999999"/><w:right w:val="single" w:sz="4" w:color="999999"/><w:insideH w:val="single" w:sz="4" w:color="999999"/><w:insideV w:val="single" w:sz="4" w:color="999999"/></w:tblBorders></w:tblPr>';
+    body+=trow(['Run','Time','Match','Errors','Not Found','Accuracy','Delta','Matches Added'],hw,{bold:true,shade:'2D3748',color:'FFFFFF',sz:14});
+    
+    runHistory.forEach(function(run){
+      var deltaText='';
+      if(run.delta){
+        var parts2=[];
+        if(run.resolvedNotFound) parts2.push(run.resolvedNotFound+' not-found resolved');
+        if(run.resolvedErrors) parts2.push(run.resolvedErrors+' errors resolved');
+        if(run.newErrors) parts2.push(run.newErrors+' new errors');
+        parts2.push('accuracy '+(parseFloat(run.delta.accuracy)>=0?'+':'')+run.delta.accuracy+'%');
+        deltaText=parts2.join(', ');
+      } else {
+        deltaText='Initial scan';
+      }
+      
+      // Format aliases added for this run
+      var aliasText='';
+      if(run.runNumber>1){
+        var prevAliases=runHistory[run.runNumber-2]?runHistory[run.runNumber-2].aliasesActive:{};
+        var newAliases=[];
+        for(var ak in run.aliasesActive){
+          if(!prevAliases[ak]) newAliases.push(ak+' \u2192 '+run.aliasesActive[ak]);
+        }
+        aliasText=newAliases.length>0?newAliases.join('; '):'(none)';
+      } else {
+        var startAliases=Object.keys(run.aliasesActive);
+        aliasText=startAliases.length>0?startAliases.length+' loaded from learned':'(none)';
+      }
+      
+      body+=trow([
+        String(run.runNumber),
+        run.timestamp,
+        String(run.matches),
+        String(run.errors),
+        String(run.notFound),
+        run.accuracy+'%',
+        deltaText,
+        aliasText
+      ],hw,{sz:13,shade:run.runNumber===runHistory.length?'EFF6FF':''});
+    });
+    body+='</w:tbl>';
+    body+=p('',{after:100});
+  }
+
+  // Diagnostics by slide
+  var slideDiag={};
+  errors.forEach(function(r){var s=r.slide;if(!slideDiag[s])slideDiag[s]={errors:[],total:0,matches:0};slideDiag[s].errors.push(r)});
+  results.forEach(function(r){var s=r.slide;if(!slideDiag[s])return;slideDiag[s].total++;if(r.status==='MATCH')slideDiag[s].matches++});
+  var hasSlideErrors=false;
+  for(var s in slideDiag){
+    var d=slideDiag[s];
+    if(!d.errors.length) continue;
+    if(!hasSlideErrors){body+=p('Diagnostics by Slide',{sz:26,bold:true,after:100});hasSlideErrors=true}
+    var cols={},sheets={};
+    d.errors.forEach(function(e){cols[e.column]=1;sheets[e.sheet]=1});
+    var parts=[];
+    var colList=Object.keys(cols);if(colList.length<=3)parts.push('Cols: '+colList.join(', '));
+    var sheetList=Object.keys(sheets);if(sheetList.length<=3)parts.push('Sheets: '+sheetList.join(', '));
+    body+=p('Slide '+s+' ('+d.errors.length+' errors, '+d.matches+'/'+d.total+' passed) \u2014 '+parts.join(' | '),{sz:18,after:40});
+  }
+
+  // Errors table
+  if(errors.length){
+    body+=p('',{after:100});
+    body+=p('Errors ('+errors.length+')',{sz:26,bold:true,after:100});
+    var ew=[600,600,2000,1400,600,600,500,1200,2900];
+    var etw=ew.reduce(function(a,b){return a+b},0);
+    body+='<w:tbl><w:tblPr><w:tblW w:w="'+etw+'" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="999999"/><w:left w:val="single" w:sz="4" w:color="999999"/><w:bottom w:val="single" w:sz="4" w:color="999999"/><w:right w:val="single" w:sz="4" w:color="999999"/><w:insideH w:val="single" w:sz="4" w:color="999999"/><w:insideV w:val="single" w:sz="4" w:color="999999"/></w:tblBorders></w:tblPr>';
+    body+=trow(['Slide','Sheet','Label','Column','PPT','Excel','Diff','Flag','Debug'],ew,{bold:true,shade:'2D3748',color:'FFFFFF',sz:14});
+    errors.forEach(function(r){
+      var flag=r._userFlag==='deck_error'?'DECK ERROR':r._userFlag==='wrong_match'?'WRONG MATCH':r._userFlag==='ok'?'OK':'';
+      body+=trow([r.slide||'',r.sheet||'',r.label||'',r.column||'',String(r.pptValue||''),r.excelValue!=null?String(r.excelValue):'',r.diff!=null?String(r.diff):'',flag,r.debug||''],ew,{sz:14,shade:r._userFlag==='deck_error'?'FFF5F5':r._userFlag==='wrong_match'?'FFFFF0':'FFF5F5'});
+    });
+    body+='</w:tbl>';
+  }
+
+  // Not Found table
+  if(notFoundList.length){
+    body+=p('',{after:100});
+    body+=p('Not Found ('+notFoundList.length+')',{sz:26,bold:true,after:100});
+    var nw=[600,600,2000,1400,600,1200,3900];
+    var ntw=nw.reduce(function(a,b){return a+b},0);
+    body+='<w:tbl><w:tblPr><w:tblW w:w="'+ntw+'" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="999999"/><w:left w:val="single" w:sz="4" w:color="999999"/><w:bottom w:val="single" w:sz="4" w:color="999999"/><w:right w:val="single" w:sz="4" w:color="999999"/><w:insideH w:val="single" w:sz="4" w:color="999999"/><w:insideV w:val="single" w:sz="4" w:color="999999"/></w:tblBorders></w:tblPr>';
+    body+=trow(['Slide','Sheet','Label','Column','PPT','Flag','Debug'],nw,{bold:true,shade:'2D3748',color:'FFFFFF',sz:14});
+    notFoundList.forEach(function(r){
+      var flag=r._userFlag==='wrong_match'?'WRONG MATCH':r._userFlag==='ok'?'OK':'';
+      body+=trow([r.slide||'',r.sheet||'',r.label||'',r.column||'',String(r.pptValue||''),flag,r.debug||''],nw,{sz:14});
+    });
+    body+='</w:tbl>';
+  }
+
+  // Skipped
+  if(skippedItems.length){
+    body+=p('',{after:100});
+    body+=p('Skipped ('+skippedItems.length+')',{sz:26,bold:true,after:100});
+    var sw=[800,3000,6600];
+    var stw=sw.reduce(function(a,b){return a+b},0);
+    body+='<w:tbl><w:tblPr><w:tblW w:w="'+stw+'" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="999999"/><w:left w:val="single" w:sz="4" w:color="999999"/><w:bottom w:val="single" w:sz="4" w:color="999999"/><w:right w:val="single" w:sz="4" w:color="999999"/><w:insideH w:val="single" w:sz="4" w:color="999999"/><w:insideV w:val="single" w:sz="4" w:color="999999"/></w:tblBorders></w:tblPr>';
+    body+=trow(['Slide','Label','Reason'],sw,{bold:true,shade:'2D3748',color:'FFFFFF',sz:14});
+    var seen={};
+    skippedItems.forEach(function(s){
+      var k=s.slide+'|'+s.label+'|'+s.reason;
+      if(!seen[k]){seen[k]=1;body+=trow([s.slide||'',s.label||'',s.reason||''],sw,{sz:14})}
+    });
+    body+='</w:tbl>';
+  }
+
+  // Include learned matches in report so they can be shared/imported
+  var allMatches={labels:{},columns:{},skipLabels:[]};
+  // Merge built-in user aliases + localStorage learned
+  try {
+    var stored=localStorage.getItem(LEARNED_KEY);
+    if(stored){var d=JSON.parse(stored);allMatches=d}
+  } catch(e){}
+  // Also merge current session aliases
+  for(var mk in userAliases.labels) allMatches.labels[mk]=userAliases.labels[mk];
+  for(var mk in userAliases.columns) allMatches.columns[mk]=userAliases.columns[mk];
+  userAliases.skipLabels.forEach(function(s){if(allMatches.skipLabels.indexOf(s)===-1) allMatches.skipLabels.push(s)});
+
+  var matchCount=Object.keys(allMatches.labels).length+Object.keys(allMatches.columns).length+allMatches.skipLabels.length;
+  if(matchCount>0){
+    body+=p('',{after:200});
+    body+=p('Learned Matches ('+matchCount+')',{sz:26,bold:true,after:100});
+    body+=p('These matches were added by the checker to help identify PPT labels and columns in the banners. They can be incorporated into future versions of the tool.',{sz:18,after:100,color:'888888'});
+
+    var mw=[2000,1200,5200];
+    var mtw=mw.reduce(function(a,b){return a+b},0);
+    body+='<w:tbl><w:tblPr><w:tblW w:w="'+mtw+'" w:type="dxa"/><w:tblBorders><w:top w:val="single" w:sz="4" w:color="999999"/><w:left w:val="single" w:sz="4" w:color="999999"/><w:bottom w:val="single" w:sz="4" w:color="999999"/><w:right w:val="single" w:sz="4" w:color="999999"/><w:insideH w:val="single" w:sz="4" w:color="999999"/><w:insideV w:val="single" w:sz="4" w:color="999999"/></w:tblBorders></w:tblPr>';
+    body+=trow(['Type','PPT Says','Banner Says'],mw,{bold:true,shade:'2D3748',color:'FFFFFF',sz:14});
+    for(var lk in allMatches.labels){
+      body+=trow(['Label',lk,allMatches.labels[lk]],mw,{sz:14});
+    }
+    for(var ck in allMatches.columns){
+      body+=trow(['Column',ck,allMatches.columns[ck]],mw,{sz:14});
+    }
+    allMatches.skipLabels.forEach(function(sl){
+      body+=trow(['Skip',sl,'(excluded from checking)'],mw,{sz:14});
+    });
+    body+='</w:tbl>';
+  }
+
+  // ─── DIAGNOSTICS APPENDIX ───
+  // Detailed trace for errors and not-found — helps diagnose matching issues
+  var diagItems=errors.concat(notFoundList).filter(function(r){return r._trace});
+  if(diagItems.length>0){
+    body+=p('',{after:200});
+    body+=p('Diagnostics Appendix',{sz:26,bold:true,after:80});
+    body+=p('Detailed matching trace for each error/not-found. Use this to diagnose why the tool picked a wrong match or missed a label.',{sz:16,after:100,color:'888888'});
+
+    diagItems.forEach(function(r){
+      var t=r._trace;
+      if(!t) return;
+      var flag=r._userFlag==='deck_error'?'  [DECK ERROR]':r._userFlag==='wrong_match'?' [WRONG MATCH]':r._userFlag==='ok'?' [OK]':'';
+      body+=p('Slide '+r.slide+' | "'+r.label+'" → '+r.column+' | PPT='+r.pptValue+' Excel='+(r.excelValue!=null?r.excelValue:'?')+flag,{sz:18,bold:true,after:40});
+
+      // PPT table structure
+      if(t.pptGroupHeaders && t.pptTableHeaders){
+        var grpLine='  Groups: '+t.pptGroupHeaders.filter(function(g){return g}).join(' | ');
+        var colLine='  Columns: '+t.pptTableHeaders.join(' | ');
+        body+=p(grpLine,{sz:14,after:20,color:'666666'});
+        body+=p(colLine,{sz:14,after:20,color:'666666'});
+      }
+      if(t.groupHint) body+=p('  Group hint: "'+t.groupHint+'"',{sz:14,after:20,color:'666666'});
+
+      // Label sources
+      body+=p('  Label sources ('+t.sourceSummary.length+'):',{sz:14,after:20,color:'666666'});
+      t.sourceSummary.forEach(function(s){
+        body+=p('    Sheet '+s.sheet+' row '+s.row+' "'+s.label+'" ('+s.method+')',{sz:14,after:10,color:'888888'});
+      });
+
+      // Aliases that fired
+      if(t.aliasesFired.length>0){
+        body+=p('  Aliases: '+t.aliasesFired.join(', '),{sz:14,after:20,color:'4488AA'});
+      }
+
+      // Match candidates
+      if(t.candidates.length>0){
+        body+=p('  Candidates evaluated ('+t.candidates.length+'):',{sz:14,after:20,color:'666666'});
+        t.candidates.forEach(function(c){
+          var line='    Sheet '+c.sheet+' col '+c.colIdx+' "'+c.colHeader+'" (score='+c.colScore+', '+c.method+') → Excel='+c.excelVal+' diff='+c.diff+' '+c.status;
+          var color=c.status==='MATCH'?'228B22':c.diff<=2?'CC8800':'CC4444';
+          body+=p(line,{sz:14,after:10,color:color});
+        });
+      } else {
+        body+=p('  No candidates evaluated (column not matched)',{sz:14,after:20,color:'CC4444'});
+      }
+      body+=p('',{after:60});
+    });
+  }
+
+  // Build the DOCX ZIP
+  var zip=new JSZip();
+  zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  zip.file('word/_rels/document.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>');
+  zip.file('word/document.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr></w:body></w:document>');
+
+  zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}).then(function(blob){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;
+    a.download=projectName.replace(/\s+/g,'_')+'_deck_check.docx';
+    a.style.display='none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url)},100);
+  });
+}
+
+</script>
+</body>
+</html>
