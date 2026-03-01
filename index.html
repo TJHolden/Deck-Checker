@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -103,7 +104,9 @@ input:focus,select:focus{border-color:var(--accent)}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn-small" onclick="addAlias('label')">+ Label Match</button>
         <button class="btn-small" onclick="addAlias('column')">+ Column Match</button>
-        <button class="btn-small" onclick="addAlias('skip')">+ Skip Label</button>
+        <button class="btn-small" onclick="addAlias('question')">+ Question Match</button>
+        <button class="btn-small" onclick="addAlias('skip')">+ Skip</button>
+        <button class="btn-small" onclick="addAlias('unskip')">+ Un-skip</button>
         <button class="btn-small" onclick="clearLearnedAliases()" style="color:var(--red)">Clear Learned</button>
         <button class="btn" onclick="rerunWithAliases()" style="padding:6px 16px">🔄 Re-check</button>
       </div>
@@ -111,7 +114,8 @@ input:focus,select:focus{border-color:var(--accent)}
     <div style="color:var(--dim);font-size:11px;margin-bottom:10px">
       <b>Label Match:</b> Identify what a PPT label is called in the banners (e.g. "Case-by-case" → "case-by-case basis").<br>
       <b>Column Match:</b> Identify what a PPT column is called in the banners (e.g. "Support" → "Supprt").<br>
-      <b>Skip:</b> Exclude a label from checking (e.g. "Net", "Total").
+      <b>Skip:</b> Exclude a label from checking.<br>
+      <b>Un-skip:</b> Force-check a label the tool auto-skipped (e.g. "Net" when it exists in banners).
     </div>
     <div id="aliasRows"></div>
   </div>
@@ -120,8 +124,9 @@ input:focus,select:focus{border-color:var(--accent)}
 <script>
 var workbook=null, sheetNames=[], sheetsData={}, sheetQuestionText={}, sheetQuestionNum={}, deckSlides=[], results=[], skippedItems=[], excelFileName='', pptFileName='';
 var runHistory=[];
+var run1Snapshot=null; // Full capture of initial scan for report
 var workbook2=null, sheetNames2=[], sheetsData2={}, sheetQuestionText2={}, sheetQuestionNum2={}, excelFileName2='';
-var pollingAliases={'supt':'support','sprt':'support','gov':'governor','govt':'government','cong':'congress','pres':'president','dem':'democrat','rep':'republican','gop':'republican','hc':'health care','hlt':'health','econ':'economy','ed':'education','env':'environment','imm':'immigration','infra':'infrastructure','kids':'child','child':'child','overall':'total','total':'overall'};
+var pollingAliases={'supt':'support','sprt':'support','supp':'support','supprt':'support','gov':'governor','govt':'government','cong':'congress','pres':'president','dem':'democrat','rep':'republican','gop':'republican','hc':'health care','hlt':'health','econ':'economy','ed':'education','env':'environment','imm':'immigration','infra':'infrastructure','kids':'child','child':'child','overall':'total','total':'overall','track':'direction','direction':'track','decln':'declining','declining':'decln','fav':'favorable','unfav':'unfavorable','approv':'approve','disapprov':'disapprove','opp':'oppose','miltry':'military','nthing':'nothing','dislke':'dislike','polcy':'policy','incr':'increase','decr':'decrease'};
 
 function esc(s){var e=document.createElement('span');e.textContent=s;return e.innerHTML}
 function log(msg){var el=document.getElementById('scanLog');el.classList.remove('hidden');el.textContent+=msg+'\n';el.scrollTop=el.scrollHeight}
@@ -447,7 +452,7 @@ function labelsMatch(pptLabel, excelLabel){
     }
     return result.sort(function(a,b){return a-b}).join(' ');
   }
-  var pInc=normIncome(pN), eInc=normIncome(eStripped);
+  var pInc=normIncome(pptLabel), eInc=normIncome(excelLabel);
   if(pInc && eInc && pInc===eInc) return true;
   // Short label contained in Excel label: "yes" in "vote yes", "no" in "no impact"
   // But NOT single words matching within long phrases: "star" in "middleton star fire districts"
@@ -460,7 +465,7 @@ function labelsMatch(pptLabel, excelLabel){
   // "Temporary" → "Temporary, with tax increases and funding..."
   // Also match last word: "Safer" → "Make your community safer"
   // Also match when PPT word is a key word in a shorter Excel label
-  var pSingleWord=pN.split(/\s+/).length===1 && pN.length>=4;
+  var pSingleWord=pN.split(/\s+/).length===1 && pN.length>=3;
   if(pSingleWord){
     var eFirstWord=eStripped.split(/[\s,]+/)[0];
     if(eFirstWord===pN) return true;
@@ -505,7 +510,16 @@ function labelsMatch(pptLabel, excelLabel){
   // Block: single word matching as a word within a very long phrase (too ambiguous)
   // "Star" should NOT match "Middleton Star Fire Districts" 
   // But "Safer" CAN match "Make your community safer" (caught above)
-  if(pWords.length===1 && eWords.length>=5) return false;
+  // Exception: if the single word appears in the first 3 words of the banner, allow it
+  // This handles "Okay" → "That's okay because illegal immigration..."
+  if(pWords.length===1 && eWords.length>=5){
+    var inFirstWords=false;
+    var firstFew=eWords.slice(0,3);
+    for(var fw=0;fw<firstFew.length;fw++){
+      if(wordMatch(pN, firstFew[fw])){inFirstWords=true;break}
+    }
+    if(!inFirstWords) return false;
+  }
 
   // Combined category labels: "Much More/ Somewhat" → try core words vs short Excel labels
   if(pN.indexOf('/')!==-1){
@@ -563,6 +577,9 @@ function labelsMatch(pptLabel, excelLabel){
     }
     var score=matched/Math.max(pW.length,eW.length);
     if(matched>=2&&score>=0.5) return true;
+    // If ALL PPT words match somewhere in a long banner label, accept it
+    // This handles abbreviated PPT labels like "Decln. rates" → "Violent crime rates have been declining..."
+    if(pW.length>=2 && matched===pW.length && eW.length>pW.length) return true;
   }
   return false;
 }
@@ -571,13 +588,19 @@ function headerMatch(pptHeader, excelHeader){
   var pN=norm(pptHeader), eN=norm(excelHeader);
   if(!pN||!eN) return false;
   if(pN===eN) return true;
+  // Expand polling aliases before matching
   var pW=pN.split(/[\s\/]+/).filter(function(w){return w.length>1});
   var eW=eN.split(/[\s\/]+/).filter(function(w){return w.length>1});
+  var pWx=pW.map(function(w){return pollingAliases[w]||w});
+  var eWx=eW.map(function(w){return pollingAliases[w]||w});
+  if(pWx.join(' ')===eWx.join(' ')) return true;
   if(pW.length>0&&eW.length>0){
     var matched=0;
     for(var pi=0;pi<pW.length;pi++){
       for(var ei=0;ei<eW.length;ei++){
         if(pW[pi]===eW[ei]||wordMatch(pW[pi],eW[ei])){matched++;break}
+        // Also check with alias expansion
+        if(pWx[pi]===eWx[ei]||wordMatch(pWx[pi],eWx[ei])){matched++;break}
       }
     }
     var score=matched/Math.max(pW.length, eW.length);
@@ -682,6 +705,36 @@ function getExcelHeaders(sheetName){
     headers.push(parts.join(' ').trim());
   }
   return headers;
+}
+
+// Returns {heading, subheading} for each column — heading is the group row, subheading is the bottom row
+function getExcelHeaderParts(sheetName){
+  var data=sheetsData[sheetName]; if(!data) return [];
+  var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+  var dataStart=0;
+  for(var r=0;r<data.length;r++){
+    var code=data[r][codeColIdx];
+    if((typeof code==='number'?code:parseInt(code,10))===2){dataStart=r;break}
+  }
+  if(dataStart<2) return []; // Need at least 2 header rows
+  var headerEnd=dataStart;
+  var maxCol=0;
+  for(var r=0;r<headerEnd;r++){if(data[r]&&data[r].length>maxCol) maxCol=data[r].length}
+  
+  var result=[];
+  // Top rows = heading (group), last pre-data row = subheading
+  var bottomRowIdx=headerEnd-1;
+  for(var ci=0;ci<maxCol;ci++){
+    var topParts=[];
+    for(var r=0;r<bottomRowIdx;r++){
+      var v=String(data[r][ci]||'').replace(/[\n\r]+/g,' ').trim();
+      if(v && !/^\d+$/.test(v) && topParts.indexOf(v)===-1) topParts.push(v);
+    }
+    var sub=String(data[bottomRowIdx][ci]||'').replace(/[\n\r]+/g,' ').trim();
+    if(/^\d+$/.test(sub)) sub='';
+    result.push({heading:topParts.join(' '),subheading:sub});
+  }
+  return result;
 }
 
 function getBottomRowHeaders(sheetName){
@@ -1416,10 +1469,26 @@ function runFullScan(){
       }
       for(var ci=0;ci<(tbl.rows[0]||[]).length;ci++){
         var h='';
-        for(var hr=0;hr<pptHeaderCount;hr++){
-          var v=(tbl.rows[hr]||[])[ci]||'';
-          v=v.trim();
-          if(v && v!==h) h+=(h?' ':'')+v;
+        if(pptHeaderCount>=2){
+          // Use ONLY the bottom header row as the column name
+          // Group context from upper rows is already in colGroup
+          var bottomVal=(tbl.rows[pptHeaderCount-1]||[])[ci]||'';
+          h=bottomVal.trim();
+          // If bottom row is empty, fall back to combining all rows
+          if(!h){
+            for(var hr=0;hr<pptHeaderCount;hr++){
+              var v=(tbl.rows[hr]||[])[ci]||'';
+              v=v.trim();
+              if(v && v!==h) h+=(h?' ':'')+v;
+            }
+          }
+        } else {
+          // Single header row — use it directly
+          for(var hr=0;hr<pptHeaderCount;hr++){
+            var v=(tbl.rows[hr]||[])[ci]||'';
+            v=v.trim();
+            if(v && v!==h) h+=(h?' ':'')+v;
+          }
         }
         colHeaders.push(h.trim());
       }
@@ -1637,8 +1706,52 @@ function runFullScan(){
     }
 
     // ─── CHART-BASED CHECKING ───
-    // Charts don't have column headers, so we can't reliably match values
-    // Skip chart checking to avoid false matches
+    // Chart categories = labels, chart values = Overall column percentages
+    if(slide.chartData && slide.chartData.length>0){
+      var chartMatchTracker={}; // Track label→first matched value to detect multi-chart ambiguity
+      for(var chi=0;chi<slide.chartData.length;chi++){
+        var chart=slide.chartData[chi];
+        if(!chart.categories || !chart.values) continue;
+        var numPairs=Math.min(chart.categories.length, chart.values.length);
+        log('  Chart '+(chi+1)+': '+numPairs+' categories'+(chart.seriesName?' ('+chart.seriesName+')':''));
+        for(var cpi=0;cpi<numPairs;cpi++){
+          var catLabel=chart.categories[cpi];
+          if(!catLabel || !catLabel.trim()) continue;
+          var chartVal=chart.values[cpi];
+          if(chartVal===null || chartVal===undefined || isNaN(chartVal)) continue;
+          // Convert decimal to percentage if value is between -1 and 1
+          var pptNum;
+          if(Math.abs(chartVal)<=1){
+            pptNum=Math.round(chartVal*100);
+          } else {
+            pptNum=Math.round(chartVal);
+          }
+          // Skip very small values that might be rounding artifacts
+          if(pptNum===0 && Math.abs(chartVal)<0.005) continue;
+          
+          // Check if we've already matched this label from another chart on this slide
+          var catKey=norm(catLabel);
+          if(chartMatchTracker[catKey]!==undefined && chartMatchTracker[catKey]!==pptNum){
+            // Same label, different value = different question's chart
+            // Can't reliably auto-match — would need Question Match
+            // Only check the first instance, skip the rest
+            log('    ⏭ Skipping "'+catLabel+'" ('+pptNum+'%) — duplicate label from chart '+(chi+1)+', needs Question Match');
+            continue;
+          }
+          chartMatchTracker[catKey]=pptNum;
+          
+          var _sheetHint=null, _mc=0; 
+          for(var _sk in slideSheetCounts){if(slideSheetCounts[_sk]>_mc){_mc=slideSheetCounts[_sk];_sheetHint=_sk}}
+          
+          var result=findBestMatch(_activeLabelIndex, catLabel.trim(), 'Overall', pptNum, slide.slideNum, 'chart'+(chi+1), _sheetHint, ['Overall'], slideContextText, '');
+          if(result){
+            result._fromChart=true;
+            nr.push(result); 
+            if(result.sheet&&result.sheet!=='?') slideSheetCounts[result.sheet]=(slideSheetCounts[result.sheet]||0)+1;
+          }
+        }
+      }
+    }
   }
 
   results=nr;
@@ -1688,6 +1801,38 @@ function runFullScan(){
   }
   
   runHistory.push(snapshot);
+  
+  // On Run 1, capture full details for the report
+  if(runHistory.length===1){
+    run1Snapshot={
+      errors:nr.filter(function(r){return r.status==='ERROR'}).map(function(r){
+        return {slide:r.slide,sheet:r.sheet,label:r.label,column:r.column,
+          pptValue:r.pptValue,excelValue:r.excelValue,diff:r.diff,debug:r.debug,
+          _trace:r._trace?{
+            groupHint:r._trace.groupHint,
+            sourceSummary:r._trace.sourceSummary,
+            candidates:r._trace.candidates,
+            aliasesFired:r._trace.aliasesFired,
+            pptTableHeaders:r._trace.pptTableHeaders,
+            pptGroupHeaders:r._trace.pptGroupHeaders
+          }:null};
+      }),
+      notFound:nr.filter(function(r){return r.status==='NOT FOUND'}).map(function(r){
+        return {slide:r.slide,sheet:r.sheet,label:r.label,column:r.column,
+          pptValue:r.pptValue,debug:r.debug,
+          _trace:r._trace?{
+            groupHint:r._trace.groupHint,
+            sourceSummary:r._trace.sourceSummary,
+            candidates:r._trace.candidates,
+            aliasesFired:r._trace.aliasesFired
+          }:null};
+      }),
+      skipped:skippedItems.slice(0,50).map(function(s){
+        return {slide:s.slide,label:s.label,reason:s.reason};
+      }),
+      total:nr.length, matches:m, errors:e, notFound:nf, skippedCount:skippedItems.length, accuracy:acc
+    };
+  }
 
   stat.textContent='Done! '+nr.length+' checks: '+m+' match, '+e+' errors, '+rd+' rounding, '+nf+' not found';
   fill.style.width='100%';
@@ -1702,10 +1847,17 @@ function runFullScan(){
 
 function findBestMatch(labelIndex, pptLabel, pptColHeader, pptNum, slideNum, tableIdx, slideSheetHint, siblingCols, slideContextText, groupHint){
   var key=norm(pptLabel);
-  // Skip PPT-only calculated labels and date/wave labels
-  var skipLabels=['net change','change','net'];
-  if(skipLabels.indexOf(key)!==-1 || userAliases.skipLabels.indexOf(key)!==-1){
-    skippedItems.push({slide:String(slideNum),label:pptLabel,reason:'Calculated label ('+key+')',table:tableIdx+1});
+  // Skip PPT-only calculated labels — but ONLY if the label isn't actually in the banners
+  var autoSkipLabels=['net change','change'];
+  // User can force un-skip via Match Helper
+  var isUnskipped=userAliases.unskipLabels && userAliases.unskipLabels.indexOf(key)!==-1;
+  if(!isUnskipped && autoSkipLabels.indexOf(key)!==-1){
+    skippedItems.push({slide:String(slideNum),label:pptLabel,reason:'Calculated label "'+key+'" (use Un-skip to override)',table:tableIdx+1});
+    return null;
+  }
+  // User-added skip labels always skip
+  if(userAliases.skipLabels.indexOf(key)!==-1){
+    skippedItems.push({slide:String(slideNum),label:pptLabel,reason:'Manually skipped',table:tableIdx+1});
     return null;
   }
   if(/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s*\d{2,4}$/.test(key)){
@@ -1715,33 +1867,148 @@ function findBestMatch(labelIndex, pptLabel, pptColHeader, pptNum, slideNum, tab
   // Skip "Even" and "NA" and pure text-number combos like "6% 2% 6% 12%"
   if(key==='even'||key==='na'||key==='n/a') return null;
 
+  // ─── QUESTION MATCH OVERRIDE ───
+  // If user pinned this PPT label to a specific sheet, ONLY look there
+  var qMatch=null;
+  if(userAliases.questionMatches){
+    for(var qmi=0;qmi<userAliases.questionMatches.length;qmi++){
+      if(userAliases.questionMatches[qmi].pptLabel===key){
+        qMatch=userAliases.questionMatches[qmi]; break;
+      }
+    }
+  }
+  if(qMatch){
+    // Find the label on the specified sheet
+    var qSources=[];
+    var qLabelKey=qMatch.bannerLabel||key;
+    // Search labelIndex for rows on the target sheet
+    var allLabelKeys=Object.keys(labelIndex);
+    for(var qlk=0;qlk<allLabelKeys.length;qlk++){
+      var entries=labelIndex[allLabelKeys[qlk]];
+      for(var qle=0;qle<entries.length;qle++){
+        if(String(entries[qle].sheet)===String(qMatch.sheet)){
+          // If bannerLabel specified, must match; otherwise match any label on this sheet that fuzzy-matches
+          if(qMatch.bannerLabel){
+            if(allLabelKeys[qlk]===qMatch.bannerLabel) qSources.push(entries[qle]);
+          } else {
+            // Match if key matches this label entry
+            if(allLabelKeys[qlk]===key || labelsMatch(pptLabel, entries[qle].label)){
+              qSources.push(entries[qle]);
+            }
+          }
+        }
+      }
+    }
+    if(qSources.length>0){
+      // Use these sources exclusively — skip all other matching
+      var sourceMethod={};
+      for(var qsi=0;qsi<qSources.length;qsi++) sourceMethod[qSources[qsi].sheet+'_'+qSources[qsi].rowIdx]='question_match';
+      // Jump to column matching with these pinned sources
+      var bestResult=null, bestDiff=999;
+      for(var si=0;si<qSources.length;si++){
+        var src=qSources[si];
+        var data=sheetsData[src.sheet]; if(!data) continue;
+        var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+        var headers=getExcelHeaders(src.sheet);
+        var hdrParts=getExcelHeaderParts(src.sheet);
+        for(var ci=0;ci<headers.length;ci++){
+          var colAlias=userAliases.columns[norm(pptColHeader)];
+          var colKeyP=colAlias||norm(pptColHeader);
+          var colKeyE=norm(headers[ci]||'');
+          var subH=hdrParts[ci]?norm(hdrParts[ci].subheading||''):'';
+          var matched=colKeyP===colKeyE || colKeyP===subH || labelsMatch(pptColHeader, headers[ci]||'');
+          if(hdrParts[ci]&&hdrParts[ci].subheading) matched=matched||labelsMatch(pptColHeader, hdrParts[ci].subheading);
+          if(!matched) continue;
+          var val=data[src.rowIdx]?data[src.rowIdx][ci]:null;
+          if(val===null||val===undefined) continue;
+          var excelNum;
+          if(typeof val==='number'&&Math.abs(val)<=1.5) excelNum=Math.round(val*100);
+          else excelNum=Math.round(parseFloat(val));
+          if(isNaN(excelNum)) continue;
+          var diff=Math.abs(pptNum-excelNum);
+          if(diff<bestDiff){
+            bestDiff=diff;
+            var hdrContext=hdrParts[ci]?((hdrParts[ci].heading||'')+' > '+(hdrParts[ci].subheading||'')):(headers[ci]||'');
+            bestResult={
+              slide:String(slideNum), sheet:src.sheet+(sheetQuestionNum[src.sheet]?' ('+sheetQuestionNum[src.sheet]+')':''),
+              label:pptLabel, column:pptColHeader,
+              pptValue:pptNum, excelValue:excelNum, diff:diff,
+              status:diff===0?'MATCH':diff<=1?'ROUNDING':'ERROR',
+              confidence:diff===0?'HIGH':diff<=2?'MED':'LOW',
+              debug:'Q-MATCH sheet '+src.sheet+(sheetQuestionNum[src.sheet]?' ('+sheetQuestionNum[src.sheet]+')':'')+' col '+ci+' ['+hdrContext+'] raw='+val+'→'+excelNum,
+              _trace:{pptLabel:pptLabel,pptCol:pptColHeader,pptValue:pptNum,groupHint:groupHint||'',labelKey:key,
+                sourceSummary:[{sheet:src.sheet,row:src.rowIdx,label:src.label,method:'question_match'}],
+                candidates:[{sheet:src.sheet,colIdx:ci,colHeader:headers[ci]||'',colScore:100,method:'question_match',excelVal:excelNum,diff:diff,status:diff===0?'MATCH':'ERROR'}],
+                aliasesFired:['Q-MATCH→sheet '+qMatch.sheet]}
+            };
+          }
+        }
+      }
+      return bestResult;
+    }
+  }
+
   var sources=labelIndex[key]?labelIndex[key].slice():null;
   var sourceMethod={};  // track per-source: 'exact' or 'fuzzy'
 
   // Label aliases: abbreviated PPT labels → banner label keywords
-  // When PPT uses a short label, search for banner rows containing that keyword
-  if(!sources || sources.length===0){
-    var labelAliasKeywords=null;
-    // Map abbreviated labels to keywords that appear in the full banner label
-    var labelAliasMap={
-      // Project-specific label matches get added via Match Helper
-      // and learned automatically for future scans
-    };
-    if(labelAliasMap[key]) labelAliasKeywords=labelAliasMap[key];
-    // Manual label aliases take priority
-    if(userAliases.labels[key]) labelAliasKeywords=userAliases.labels[key];
-    if(labelAliasKeywords){
-      if(!sources) sources=[];
+  // ALWAYS check user aliases — even if we found some exact matches, 
+  // the user might be mapping to a different/better label
+  var labelAliasKeywords=null;
+  var labelAliasMap={
+    // Project-specific label matches get added via Match Helper
+    // and learned automatically for future scans
+  };
+  if(labelAliasMap[key]) labelAliasKeywords=labelAliasMap[key];
+  // Manual label aliases take priority
+  if(userAliases.labels[key]) labelAliasKeywords=userAliases.labels[key];
+  if(labelAliasKeywords){
+    if(!sources) sources=[];
+    var aliasNorm=norm(labelAliasKeywords);
+    
+    // Method 1: EXACT key lookup — user picked from dropdown, this is the label
+    if(labelIndex[aliasNorm]){
+      for(var ali=0;ali<labelIndex[aliasNorm].length;ali++){
+        var aliSrc=labelIndex[aliasNorm][ali];
+        var aliKey=aliSrc.sheet+'_'+aliSrc.rowIdx;
+        if(!sourceMethod[aliKey]){
+          sources.push(aliSrc);
+          sourceMethod[aliKey]='alias';
+        }
+      }
+    }
+    
+    // Method 2: if exact didn't find anything, try fuzzy search across all keys
+    if(sources.length===0 || (labelIndex[key] && sources.length===labelIndex[key].length)){
       var aliasKeys=Object.keys(labelIndex);
+      var aliasTokens=aliasNorm.split(/\s+/).filter(function(w){return w.length>2});
       for(var aki=0;aki<aliasKeys.length;aki++){
         var ak=aliasKeys[aki];
-        if(ak.indexOf(labelAliasKeywords)!==-1){
-          for(var ali=0;ali<labelIndex[ak].length;ali++){
-            var aliSrc=labelIndex[ak][ali];
-            var aliKey=aliSrc.sheet+'_'+aliSrc.rowIdx;
-            if(!sourceMethod[aliKey]){
-              sources.push(aliSrc);
-              sourceMethod[aliKey]='alias';
+        if(ak===aliasNorm) continue; // already handled above
+        var matched=false;
+        // Substring match (either direction)
+        if(ak.indexOf(aliasNorm)!==-1 || aliasNorm.indexOf(ak)!==-1) matched=true;
+        // Word overlap
+        if(!matched && aliasTokens.length>=2){
+          var akTokens=ak.split(/\s+/).filter(function(w){return w.length>2});
+          var hits=0;
+          for(var ati=0;ati<aliasTokens.length;ati++){
+            for(var akti=0;akti<akTokens.length;akti++){
+              if(wordMatch(aliasTokens[ati],akTokens[akti])){hits++;break}
+            }
+          }
+          if(hits>=Math.ceil(aliasTokens.length*0.6) && hits>=2) matched=true;
+        }
+        // Full fuzzy
+        if(!matched && labelsMatch(labelAliasKeywords, ak)) matched=true;
+        
+        if(matched){
+          for(var ali2=0;ali2<labelIndex[ak].length;ali2++){
+            var aliSrc2=labelIndex[ak][ali2];
+            var aliKey2=aliSrc2.sheet+'_'+aliSrc2.rowIdx;
+            if(!sourceMethod[aliKey2]){
+              sources.push(aliSrc2);
+              sourceMethod[aliKey2]='alias';
             }
           }
         }
@@ -1791,9 +2058,17 @@ function findBestMatch(labelIndex, pptLabel, pptColHeader, pptNum, slideNum, tab
     }
   }
   if(!sources.length){
+    var _earlyTrace={
+      pptLabel:pptLabel, pptCol:pptColHeader, pptValue:pptNum,
+      groupHint:groupHint||'', labelKey:key,
+      sourceSummary:[], candidates:[], aliasesFired:[],
+      note:'Label "'+key+'" not found in any sheet via exact, fuzzy, or alias matching'
+    };
+    if(userAliases.labels[key]) _earlyTrace.aliasesFired.push('label alias: "'+key+'" → "'+userAliases.labels[key]+'" (no match found)');
     var r={slide:String(slideNum),sheet:'?',label:pptLabel,column:pptColHeader,pptValue:String(pptNum),
       excelValue:null,diff:null,status:'NOT FOUND',debug:'Label "'+pptLabel+'" not in any sheet'};
     r.confidence=getConfidence(r,'none');
+    r._trace=_earlyTrace;
     return r;
   }
 
@@ -1823,14 +2098,19 @@ function findBestMatch(labelIndex, pptLabel, pptColHeader, pptNum, slideNum, tab
     var excelRaw=getExcelValue(src.sheet, src.rowIdx, colIdx);
     if(excelRaw===null){continue}
     var cmp=compareValues(pptNum, excelRaw, colIdx);
+    var _qNum=sheetQuestionNum[src.sheet]||'';
+    var _qText=(sheetQuestionText[src.sheet]||'').substring(0,40);
+    var _hdrParts=getExcelHeaderParts(src.sheet);
+    var _colPart=_hdrParts[colIdx]||{heading:'',subheading:''};
+    var _colDisplay=_colPart.heading?(_colPart.heading+' > '+_colPart.subheading):getExcelHeaders(src.sheet)[colIdx];
     var result={slide:String(slideNum),sheet:src.sheet,label:src.label,column:pptColHeader,
       pptValue:String(pptNum),excelValue:cmp.excelValue,diff:cmp.diff,status:cmp.status,
-      debug:'sheet '+src.sheet+' col '+(colIdx+1)+' "'+getExcelHeaders(src.sheet)[colIdx]+'" '+cmp.interp+' raw='+excelRaw+'→'+cmp.excelValue};
+      debug:'sheet '+src.sheet+' ('+_qNum+') col '+(colIdx+1)+' ['+_colDisplay+'] '+cmp.interp+' raw='+excelRaw+'→'+cmp.excelValue};
     result.confidence=getConfidence(result, srcMethod, colScore);
     result._srcMethod=srcMethod; result._colScore=colScore;
-    // Trace: record this candidate
+    // Trace: record this candidate with heading info
     _trace.candidates.push({sheet:src.sheet,row:src.rowIdx,label:src.label,
-      colIdx:colIdx+1,colHeader:getExcelHeaders(src.sheet)[colIdx]||'',colScore:colScore,
+      colIdx:colIdx+1,colHeader:_colDisplay,colScore:colScore,
       method:srcMethod,excelVal:cmp.excelValue,diff:cmp.diff,status:cmp.status});
     if(cmp.status==='MATCH') allMatches.push(result);
     if(cmp.status==='ROUNDING') {if(!bestRounding||cmp.diff<bestRounding.diff) bestRounding=result;}
@@ -2117,10 +2397,17 @@ function buildResultsTable(title,rows,defaultOpen){
     var bg=r.status==='ERROR'?'var(--red-bg)':r.status==='ROUNDING'?'var(--yellow-bg)':r.status==='NOT FOUND'?'var(--gray-bg)':'transparent';
     var bb=r.status==='ERROR'?'var(--red-bg)':r.status==='ROUNDING'?'var(--yellow-bg)':r.status==='NOT FOUND'?'var(--gray-bg)':'var(--green-bg)';
     var clickAttr='';
-    if(r.status==='NOT FOUND' && r.debug && r.debug.indexOf('Label')!==-1){
-      clickAttr=' style="cursor:pointer" title="Click to identify this label" onclick="addAliasFromResult(\'label\',\''+esc(String(r.label||'')).replace(/'/g,"\\'")+'\');"';
-    } else if(r.status==='NOT FOUND' && r.debug && r.debug.indexOf('Col')!==-1){
-      clickAttr=' style="cursor:pointer" title="Click to identify this column" onclick="addAliasFromResult(\'column\',\''+esc(String(r.column||'')).replace(/'/g,"\\'")+'\');"';
+    if(r.status==='NOT FOUND'){
+      if(r.debug && r.debug.indexOf('Label')!==-1){
+        // Label not found — auto-create label match, "to" shows banner labels
+        clickAttr=' title="Click to match this label" onclick="addSmartMatch(\'label\',\''+esc(String(r.label||'')).replace(/'/g,"\\'")+'\');event.stopPropagation();"';
+      } else {
+        // Column not found — auto-create column match, "to" shows banner columns
+        clickAttr=' title="Click to match this column" onclick="addSmartMatch(\'column\',\''+esc(String(r.column||'')).replace(/'/g,"\\'")+'\');event.stopPropagation();"';
+      }
+    } else if(r.status==='ERROR'){
+      // Could be label or column — show choice
+      clickAttr=' title="Click to add a match" onclick="showMatchChoice(\''+esc(String(r.label||'')).replace(/'/g,"\\'")+'\',\''+esc(String(r.column||'')).replace(/'/g,"\\'")+'\');event.stopPropagation();"';
     }
     // Flag column — dropdown for errors/not-found
     var flagId='flag_'+title.replace(/\s/g,'')+'_'+ri;
@@ -2133,7 +2420,10 @@ function buildResultsTable(title,rows,defaultOpen){
         +'<option value="ok"'+(r._userFlag==='ok'?' selected':'')+'>OK/Expected</option>'
         +'</select>';
     }
-    html+='<tr'+clickAttr+' style="background:'+bg+(clickAttr?';cursor:pointer':'')+'">'+'<td>'+esc(String(r.slide||''))+'</td><td style="color:var(--muted)">'+esc(String(r.sheet||''))+'</td><td class="cell-label" title="'+esc(String(r.label||''))+'">'+esc(String(r.label||''))+'</td><td style="color:var(--muted)">'+esc(String(r.column||''))+'</td><td class="cell-bold">'+esc(String(r.pptValue||''))+'</td><td class="cell-bold">'+(r.excelValue!=null?r.excelValue:'—')+'</td><td style="color:'+sc+';font-weight:700">'+(r.diff!=null?r.diff:'—')+'</td><td><span class="status-badge" style="color:'+sc+';background:'+bb+'">'+r.status+'</span></td><td>'+confBadge(r.confidence)+'</td><td>'+flagHtml+'</td><td style="color:var(--dim);font-size:10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(String(r.debug||''))+'">'+esc(String(r.debug||''))+'</td></tr>';
+    var sheetDisplay=String(r.sheet||'');
+    var sheetQNum=r.sheet?sheetQuestionNum[r.sheet]||'':'';
+    if(sheetQNum) sheetDisplay+=' ('+sheetQNum+')';
+    html+='<tr'+clickAttr+' style="background:'+bg+(clickAttr?';cursor:pointer':'')+'">'+'<td>'+esc(String(r.slide||''))+'</td><td style="color:var(--muted)" title="'+(r.sheet?(sheetQuestionText[r.sheet]||''):'')+'">'+esc(sheetDisplay)+'</td><td class="cell-label" title="'+esc(String(r.label||''))+'">'+esc(String(r.label||''))+'</td><td style="color:var(--muted)">'+esc(String(r.column||''))+'</td><td class="cell-bold">'+esc(String(r.pptValue||''))+'</td><td class="cell-bold">'+(r.excelValue!=null?r.excelValue:'—')+'</td><td style="color:'+sc+';font-weight:700">'+(r.diff!=null?r.diff:'—')+'</td><td><span class="status-badge" style="color:'+sc+';background:'+bb+'">'+r.status+'</span></td><td>'+confBadge(r.confidence)+'</td><td>'+flagHtml+'</td><td style="color:var(--dim);font-size:10px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(String(r.debug||''))+'">'+esc(String(r.debug||''))+'</td></tr>';
   });
   html+='</tbody></table></div></div>';
   return html;
@@ -2149,48 +2439,201 @@ function buildSkippedTable(){
   }
   var html='<div class="table-wrapper"><div class="table-header"><span class="table-title">Skipped ('+deduped.length+')</span><span class="arrow">▼</span></div><div class="hidden" style="overflow-x:auto;max-height:300px;overflow-y:auto"><table class="results-table"><thead><tr><th>Slide</th><th>Label</th><th>Reason</th></tr></thead><tbody>';
   deduped.forEach(function(s){
-    html+='<tr style="background:var(--blue-bg)"><td>'+esc(s.slide)+'</td><td class="cell-label">'+esc(s.label)+'</td><td style="color:var(--blue)">'+esc(s.reason)+'</td></tr>';
+    var skipClick=' style="cursor:pointer;background:var(--blue-bg)" title="Click to un-skip or add match" onclick="showSkipChoice(\''+esc(s.label).replace(/'/g,"\\'")+'\');"';
+    html+='<tr'+skipClick+'><td>'+esc(s.slide)+'</td><td class="cell-label">'+esc(s.label)+'</td><td style="color:var(--blue)">'+esc(s.reason)+'</td></tr>';
   });
   html+='</tbody></table></div></div>';
   return html;
 }
 
-function clearResults(){results=[];skippedItems=[];runHistory=[];renderResults();document.getElementById('scanLog').classList.add('hidden')}
+function clearResults(){results=[];skippedItems=[];runHistory=[];run1Snapshot=null;renderResults();document.getElementById('scanLog').classList.add('hidden')}
 
 // ─── USER ALIASES ───
-var userAliases={labels:{},columns:{},skipLabels:[]};
+var userAliases={labels:{},columns:{},skipLabels:[],unskipLabels:[],questionMatches:[]};
+
+function buildDatalistOptions(){
+  // Build PPT labels/columns ONLY from problem items (errors, not-found, skipped)
+  var pptLabels={}, pptCols={}, excelLabels={}, excelCols={};
+  
+  // PPT labels/columns only from errors and not-found
+  results.forEach(function(r){
+    if(r.status==='ERROR' || r.status==='NOT FOUND'){
+      if(r.label) pptLabels[r.label]=1;
+      if(r.column) pptCols[r.column]=1;
+    }
+  });
+  // Also from skipped
+  skippedItems.forEach(function(s){
+    if(s.label) pptLabels[s.label]=1;
+  });
+  
+  // Excel labels from labelIndex (all banner row labels)
+  // Show as "Q# - label text" for context, but value is just the label
+  var codeColIdx=(parseInt(document.getElementById('codeCol').value)||1)-1;
+  var labelColIdx=(parseInt(document.getElementById('labelCol').value)||2)-1;
+  var seenLabels={};
+  var excelLabelItems=[]; // {value, display} pairs
+  sheetNames.forEach(function(sn){
+    var data=sheetsData[sn]; if(!data) return;
+    var qNum=sheetQuestionNum[sn]||'';
+    for(var r=0;r<data.length;r++){
+      var code=data[r][codeColIdx];
+      var cn=(typeof code==='number')?code:parseInt(code,10);
+      if(cn!==3 && cn!==33) continue;
+      var lab=String(data[r][labelColIdx]||'').trim();
+      if(lab && !seenLabels[lab]){
+        seenLabels[lab]=1;
+        var display=qNum?(qNum+' | '+lab):lab;
+        excelLabelItems.push({value:lab, display:display});
+      }
+    }
+  });
+  
+  // Excel column headers as "Heading > Subheading"
+  var seenCols={};
+  var excelColItems=[]; // {value, display} pairs  
+  sheetNames.forEach(function(sn){
+    var hdrParts=getExcelHeaderParts(sn);
+    if(hdrParts.length>0){
+      hdrParts.forEach(function(hp){
+        if(hp.subheading && hp.heading){
+          var key=hp.heading+' > '+hp.subheading;
+          if(!seenCols[key]){
+            seenCols[key]=1;
+            excelColItems.push({value:hp.subheading, display:hp.heading+' > '+hp.subheading});
+          }
+        } else if(hp.subheading && !seenCols[hp.subheading]){
+          seenCols[hp.subheading]=1;
+          excelColItems.push({value:hp.subheading, display:hp.subheading});
+        }
+      });
+    } else {
+      var hdrs=getExcelHeaders(sn);
+      hdrs.forEach(function(h){ 
+        if(h && h.trim() && !seenCols[h.trim()]){
+          seenCols[h.trim()]=1;
+          excelColItems.push({value:h.trim(), display:h.trim()});
+        }
+      });
+    }
+  });
+  
+  // Build/update datalist elements
+  function setDatalist(dlId, items){
+    var dl=document.getElementById(dlId);
+    if(!dl){ dl=document.createElement('datalist'); dl.id=dlId; document.body.appendChild(dl); }
+    dl.innerHTML='';
+    var sorted=Object.keys(items).sort(function(a,b){return a.toLowerCase().localeCompare(b.toLowerCase())});
+    sorted.forEach(function(item){
+      var opt=document.createElement('option');
+      opt.value=item;
+      dl.appendChild(opt);
+    });
+  }
+  
+  // Special datalist builder that shows display text but submits value
+  function setDatalistPairs(dlId, pairs){
+    var dl=document.getElementById(dlId);
+    if(!dl){ dl=document.createElement('datalist'); dl.id=dlId; document.body.appendChild(dl); }
+    dl.innerHTML='';
+    // Sort by display text
+    pairs.sort(function(a,b){return a.display.toLowerCase().localeCompare(b.display.toLowerCase())});
+    // Deduplicate by display
+    var seenD={};
+    pairs.forEach(function(item){
+      if(seenD[item.display]) return;
+      seenD[item.display]=1;
+      var opt=document.createElement('option');
+      // Show "Q10 — label" or "Heading > sub" as the full value
+      // collectAliases will extract the actual label/column from this
+      opt.value=item.display;
+      opt.dataset.actualValue=item.value;
+      dl.appendChild(opt);
+    });
+  }
+  
+  setDatalist('dl_pptLabels', pptLabels);
+  setDatalist('dl_pptCols', pptCols);
+  setDatalistPairs('dl_excelLabels', excelLabelItems);
+  setDatalistPairs('dl_excelCols', excelColItems);
+  
+  // Sheet datalist for question match — shows "Sheet# (Q#)" format
+  var sheetItems={};
+  sheetNames.forEach(function(sn){
+    var qNum=sheetQuestionNum[sn]||'';
+    var qText=sheetQuestionText[sn]||'';
+    var display=sn+(qNum?' ('+qNum+')':'');
+    if(qText) display+=' — '+qText.substring(0,60);
+    sheetItems[display]=1;
+  });
+  setDatalist('dl_sheets', sheetItems);
+}
 
 function addAlias(type){
   document.getElementById('aliasPanel').classList.remove('hidden');
+  // Build datalists from current data
+  buildDatalistOptions();
   var container=document.getElementById('aliasRows');
   var row=document.createElement('div');
   row.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';
   var id='ovr_'+Date.now()+'_'+Math.random().toString(36).substr(2,4);
+  var inputStyle='flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px';
+  var removeBtn='<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
   if(type==='label'){
     row.innerHTML='<span style="color:var(--yellow);font-size:11px;width:60px">LABEL</span>'
-      +'<input id="'+id+'_from" placeholder="PPT label" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<input id="'+id+'_from" list="dl_pptLabels" placeholder="PPT label" style="'+inputStyle+'">'
       +'<span style="color:var(--dim)">→</span>'
-      +'<input id="'+id+'_to" placeholder="Excel label (keyword)" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
-      +'<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+      +'<input id="'+id+'_to" list="dl_excelLabels" placeholder="Q# | stub label" style="'+inputStyle+'">'
+      +removeBtn;
     row.dataset.type='label'; row.dataset.id=id;
   } else if(type==='column'){
     row.innerHTML='<span style="color:var(--blue);font-size:11px;width:60px">COLUMN</span>'
-      +'<input id="'+id+'_from" placeholder="PPT col header" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
+      +'<input id="'+id+'_from" list="dl_pptCols" placeholder="PPT column" style="'+inputStyle+'">'
       +'<span style="color:var(--dim)">→</span>'
-      +'<input id="'+id+'_to" placeholder="Excel col header" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
-      +'<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+      +'<input id="'+id+'_to" list="dl_excelCols" placeholder="Heading > Column" style="'+inputStyle+'">'
+      +removeBtn;
     row.dataset.type='column'; row.dataset.id=id;
+  } else if(type==='question'){
+    row.innerHTML='<span style="color:var(--green);font-size:11px;width:60px">Q MATCH</span>'
+      +'<input id="'+id+'_from" list="dl_pptLabels" placeholder="PPT label (chart)" style="'+inputStyle+'">'
+      +'<span style="color:var(--dim)">→</span>'
+      +'<input id="'+id+'_to" list="dl_excelLabels" placeholder="Q# | banner label" style="'+inputStyle+'">'
+      +'<span style="color:var(--dim)">on</span>'
+      +'<input id="'+id+'_sheet" list="dl_sheets" placeholder="Sheet (Q#)" style="'+inputStyle+';max-width:180px">'
+      +removeBtn;
+    row.dataset.type='question'; row.dataset.id=id;
   } else if(type==='skip'){
     row.innerHTML='<span style="color:var(--gray);font-size:11px;width:60px">SKIP</span>'
-      +'<input id="'+id+'_from" placeholder="Label to skip" style="flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px">'
-      +'<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+      +'<input id="'+id+'_from" list="dl_pptLabels" placeholder="Label to skip" style="'+inputStyle+'">'
+      +removeBtn;
     row.dataset.type='skip'; row.dataset.id=id;
+  } else if(type==='unskip'){
+    row.innerHTML='<span style="color:var(--green);font-size:11px;width:60px">UN-SKIP</span>'
+      +'<input id="'+id+'_from" list="dl_pptLabels" placeholder="Label to un-skip" style="'+inputStyle+'">'
+      +removeBtn;
+    row.dataset.type='unskip'; row.dataset.id=id;
   }
   container.appendChild(row);
 }
 
+// Strip datalist context prefixes from dropdown selections
+// "Q10 | The reliability of..." → "The reliability of..."
+// "Age > 55+" → "55+"
+function stripLabelContext(val){
+  // Strip "Q## | " prefix from label dropdown selections
+  var m=val.match(/^Q\d+\s*\|\s*(.+)$/i);
+  if(m) return m[1];
+  return val;
+}
+function stripColContext(val){
+  // Strip "Heading > " prefix from column dropdown — keep just subheading
+  var m=val.match(/^.+\s*>\s*(.+)$/);
+  if(m) return m[1];
+  return val;
+}
+
 function collectAliases(){
-  userAliases={labels:{},columns:{},skipLabels:[]};
+  userAliases={labels:{},columns:{},skipLabels:[],unskipLabels:[],questionMatches:[]};
   var rows=document.getElementById('aliasRows').children;
   for(var i=0;i<rows.length;i++){
     var row=rows[i];
@@ -2201,22 +2644,42 @@ function collectAliases(){
     if(!from.trim()) continue;
     var fromN=norm(from.trim());
     if(type==='label' && to.trim()){
-      userAliases.labels[fromN]=to.trim().toLowerCase();
+      var cleanTo=stripLabelContext(to.trim());
+      userAliases.labels[fromN]=norm(cleanTo);
     } else if(type==='column' && to.trim()){
-      userAliases.columns[fromN]=to.trim().toLowerCase();
+      var cleanTo2=stripColContext(to.trim());
+      userAliases.columns[fromN]=norm(cleanTo2);
+    } else if(type==='question'){
+      var sheetVal=(document.getElementById(id+'_sheet')||{}).value||'';
+      // Extract sheet number from "32 (Q22) — question text"
+      var sheetMatch=sheetVal.match(/^(\d+)/);
+      var sheetNum=sheetMatch?sheetMatch[1]:'';
+      var bannerLabel=to.trim()?stripLabelContext(to.trim()):'';
+      if(sheetNum){
+        userAliases.questionMatches.push({
+          pptLabel:fromN,
+          bannerLabel:bannerLabel?norm(bannerLabel):null,
+          sheet:sheetNum
+        });
+      }
     } else if(type==='skip'){
       userAliases.skipLabels.push(fromN);
+    } else if(type==='unskip'){
+      userAliases.unskipLabels.push(fromN);
     }
   }
 }
 
 function rerunWithAliases(){
   collectAliases();
-  var count=Object.keys(userAliases.labels).length+Object.keys(userAliases.columns).length+userAliases.skipLabels.length;
+  var count=Object.keys(userAliases.labels).length+Object.keys(userAliases.columns).length+userAliases.skipLabels.length+userAliases.questionMatches.length;
   if(count>0){
     log('\n🔧 Applying '+count+' alias'+(count>1?'s':''));
     for(var k in userAliases.labels) log('  Label: "'+k+'" → "'+userAliases.labels[k]+'"');
     for(var k in userAliases.columns) log('  Column: "'+k+'" → "'+userAliases.columns[k]+'"');
+    userAliases.questionMatches.forEach(function(qm){
+      log('  Q Match: "'+qm.pptLabel+'" → '+(qm.bannerLabel||'(any label)')+' on sheet '+qm.sheet);
+    });
     userAliases.skipLabels.forEach(function(s){log('  Skip: "'+s+'"')});
   }
   // Save aliases to learned storage
@@ -2236,6 +2699,7 @@ function loadLearnedAliases(){
       if(data.labels) for(var k in data.labels) userAliases.labels[k]=data.labels[k];
       if(data.columns) for(var k in data.columns) userAliases.columns[k]=data.columns[k];
       if(data.skipLabels) data.skipLabels.forEach(function(s){ if(userAliases.skipLabels.indexOf(s)===-1) userAliases.skipLabels.push(s) });
+      if(data.unskipLabels) data.unskipLabels.forEach(function(s){ if(userAliases.unskipLabels.indexOf(s)===-1) userAliases.unskipLabels.push(s) });
       renderLearnedBadge();
     }
   } catch(e){ /* localStorage unavailable */ }
@@ -2244,7 +2708,7 @@ function loadLearnedAliases(){
 function saveLearnedAliases(){
   try {
     // Merge current aliases with previously learned ones
-    var existing={labels:{},columns:{},skipLabels:[]};
+    var existing={labels:{},columns:{},skipLabels:[],unskipLabels:[]};
     try {
       var stored=localStorage.getItem(LEARNED_KEY);
       if(stored) existing=JSON.parse(stored);
@@ -2252,6 +2716,8 @@ function saveLearnedAliases(){
     for(var k in userAliases.labels) existing.labels[k]=userAliases.labels[k];
     for(var k in userAliases.columns) existing.columns[k]=userAliases.columns[k];
     userAliases.skipLabels.forEach(function(s){ if(existing.skipLabels.indexOf(s)===-1) existing.skipLabels.push(s) });
+    if(!existing.unskipLabels) existing.unskipLabels=[];
+    userAliases.unskipLabels.forEach(function(s){ if(existing.unskipLabels.indexOf(s)===-1) existing.unskipLabels.push(s) });
     localStorage.setItem(LEARNED_KEY, JSON.stringify(existing));
     renderLearnedBadge();
   } catch(e){ /* localStorage unavailable */ }
@@ -2299,7 +2765,7 @@ function showLearnedAliases(){
 function clearLearnedAliases(){
   if(!confirm('Clear all learned matches? This cannot be undone.')) return;
   try { localStorage.removeItem(LEARNED_KEY); } catch(e){}
-  userAliases={labels:{},columns:{},skipLabels:[]};
+  userAliases={labels:{},columns:{},skipLabels:[],unskipLabels:[]};
   document.getElementById('aliasRows').innerHTML='';
   renderLearnedBadge();
 }
@@ -2314,6 +2780,85 @@ function flagResult(sel,rowIdx,tableTitle){
   else if(tableTitle==='Not Found') targetList=results.filter(function(r){return r.status==='NOT FOUND'});
   else targetList=results;
   if(targetList[rowIdx]) targetList[rowIdx]._userFlag=sel.value;
+}
+
+// Smart match — auto-creates the right match type and sets the right dropdown
+function addSmartMatch(type, value){
+  document.getElementById('aliasPanel').classList.remove('hidden');
+  buildDatalistOptions();
+  var container=document.getElementById('aliasRows');
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:6px';
+  var id='ovr_'+Date.now()+'_'+Math.random().toString(36).substr(2,4);
+  var inputStyle='flex:1;max-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:12px';
+  var removeBtn='<button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button>';
+  
+  if(type==='label'){
+    row.innerHTML='<span style="color:var(--yellow);font-size:11px;width:60px">LABEL</span>'
+      +'<input id="'+id+'_from" list="dl_pptLabels" value="'+esc(value)+'" style="'+inputStyle+'">'
+      +'<span style="color:var(--dim)">→</span>'
+      +'<input id="'+id+'_to" list="dl_excelLabels" placeholder="Q# | stub label" style="'+inputStyle+'">'
+      +removeBtn;
+    row.dataset.type='label'; row.dataset.id=id;
+  } else if(type==='column'){
+    row.innerHTML='<span style="color:var(--blue);font-size:11px;width:60px">COLUMN</span>'
+      +'<input id="'+id+'_from" list="dl_pptCols" value="'+esc(value)+'" style="'+inputStyle+'">'
+      +'<span style="color:var(--dim)">→</span>'
+      +'<input id="'+id+'_to" list="dl_excelCols" placeholder="Heading > Column" style="'+inputStyle+'">'
+      +removeBtn;
+    row.dataset.type='column'; row.dataset.id=id;
+  } else if(type==='question'){
+    row.innerHTML='<span style="color:var(--green);font-size:11px;width:60px">Q MATCH</span>'
+      +'<input id="'+id+'_from" list="dl_pptLabels" value="'+esc(value)+'" style="'+inputStyle+'">'
+      +'<span style="color:var(--dim)">→</span>'
+      +'<input id="'+id+'_to" list="dl_excelLabels" placeholder="Q# | banner label (optional)" style="'+inputStyle+'">'
+      +'<span style="color:var(--dim)">on</span>'
+      +'<input id="'+id+'_sheet" list="dl_sheets" placeholder="Sheet (Q#)" style="'+inputStyle+';max-width:180px">'
+      +removeBtn;
+    row.dataset.type='question'; row.dataset.id=id;
+  }
+  container.appendChild(row);
+  document.getElementById('aliasPanel').scrollIntoView({behavior:'smooth',block:'center'});
+  if(type==='question'){
+    var sheetInput=document.getElementById(id+'_sheet');
+    if(sheetInput) setTimeout(function(){sheetInput.focus()},100);
+  } else {
+    var toInput=document.getElementById(id+'_to');
+    if(toInput) setTimeout(function(){toInput.focus()},100);
+  }
+}
+
+// Show choice popup for skipped rows
+function showSkipChoice(label){
+  var choice=prompt('What do you want to do with "'+label+'"?\n\nType "U" to Un-skip (force check this label)\nType "L" to add a Label match (map to a banner label)');
+  if(!choice) return;
+  var c=choice.trim().toLowerCase();
+  if(c==='u' || c==='unskip' || c==='un-skip'){
+    addAliasFromResult('unskip', label);
+  } else if(c==='l' || c==='label'){
+    addSmartMatch('label', label);
+  }
+}
+
+// Show choice popup for error rows: fix the label or the column?
+function showMatchChoice(label, column){
+  var choice=prompt('What needs fixing?\n\nType "L" to add a Label match for: "'+label+'"\nType "C" to add a Column match for: "'+column+'"\nType "Q" to add a Question match (pin to specific sheet)\nType "S" to skip this label');
+  if(!choice) return;
+  var c=choice.trim().toLowerCase();
+  if(c==='l' || c==='label'){
+    addSmartMatch('label', label);
+  } else if(c==='c' || c==='column' || c==='col'){
+    addSmartMatch('column', column);
+  } else if(c==='q' || c==='question'){
+    addSmartMatch('question', label);
+  } else if(c==='s' || c==='skip'){
+    addAliasFromResult('skip', label);
+  }
+}
+
+// Add match from skipped items
+function addAliasFromSkipped(label){
+  addAliasFromResult('unskip', label);
 }
 
 function addAliasFromResult(type, value){
@@ -2416,6 +2961,60 @@ function exportReport(){
       ],hw,{sz:13,shade:run.runNumber===runHistory.length?'EFF6FF':''});
     });
     body+='</w:tbl>';
+    
+    // Detailed run-by-run breakdown
+    if(runHistory.length>1){
+      body+=p('',{after:60});
+      body+=p('Run Details',{sz:22,bold:true,after:80});
+      
+      for(var ri=1;ri<runHistory.length;ri++){
+        var run=runHistory[ri];
+        var prev=runHistory[ri-1];
+        if(!run.delta) continue;
+        
+        body+=p('Run '+run.runNumber+' ('+run.timestamp+')',{sz:18,bold:true,after:40});
+        
+        // What aliases were added
+        var newAliases=[];
+        for(var ak in run.aliasesActive){
+          if(!prev.aliasesActive[ak]) newAliases.push(ak+' → '+run.aliasesActive[ak]);
+        }
+        if(newAliases.length>0){
+          body+=p('Matches added: '+newAliases.join('; '),{sz:14,after:20,color:'4488AA'});
+        }
+        
+        // What NOT FOUNDs were resolved
+        if(run.resolvedNotFound>0){
+          var prevNFLabels=prev.notFoundLabels.map(function(n){return n.slide+'|'+n.label+'|'+n.col});
+          var curNFLabels=run.notFoundLabels.map(function(n){return n.slide+'|'+n.label+'|'+n.col});
+          var resolved=prev.notFoundLabels.filter(function(n){
+            return curNFLabels.indexOf(n.slide+'|'+n.label+'|'+n.col)===-1;
+          });
+          if(resolved.length>0){
+            body+=p('Resolved NOT FOUNDs ('+resolved.length+'):',{sz:14,after:20,color:'228B22'});
+            // Deduplicate by label
+            var seenLab={};
+            resolved.forEach(function(r){
+              if(!seenLab[r.label]){
+                seenLab[r.label]=1;
+                body+=p('  "'+r.label+'" (slide '+r.slide+')',{sz:14,after:10,color:'228B22'});
+              }
+            });
+          }
+        }
+        
+        // What errors were resolved or created
+        if(run.resolvedErrors>0){
+          body+=p('Resolved '+run.resolvedErrors+' error(s)',{sz:14,after:20,color:'228B22'});
+        }
+        if(run.newErrors>0){
+          body+=p('New errors: '+run.newErrors,{sz:14,after:20,color:'CC4444'});
+        }
+        
+        body+=p('Result: '+run.matches+' matches, '+run.errors+' errors, '+run.notFound+' not found ('+run.accuracy+'%)',{sz:14,after:40,color:'666666'});
+      }
+    }
+    
     body+=p('',{after:100});
   }
 
@@ -2493,8 +3092,12 @@ function exportReport(){
   for(var mk in userAliases.labels) allMatches.labels[mk]=userAliases.labels[mk];
   for(var mk in userAliases.columns) allMatches.columns[mk]=userAliases.columns[mk];
   userAliases.skipLabels.forEach(function(s){if(allMatches.skipLabels.indexOf(s)===-1) allMatches.skipLabels.push(s)});
+  if(!allMatches.questionMatches) allMatches.questionMatches=[];
+  if(userAliases.questionMatches){
+    userAliases.questionMatches.forEach(function(qm){allMatches.questionMatches.push(qm)});
+  }
 
-  var matchCount=Object.keys(allMatches.labels).length+Object.keys(allMatches.columns).length+allMatches.skipLabels.length;
+  var matchCount=Object.keys(allMatches.labels).length+Object.keys(allMatches.columns).length+allMatches.skipLabels.length+allMatches.questionMatches.length;
   if(matchCount>0){
     body+=p('',{after:200});
     body+=p('Learned Matches ('+matchCount+')',{sz:26,bold:true,after:100});
@@ -2513,7 +3116,131 @@ function exportReport(){
     allMatches.skipLabels.forEach(function(sl){
       body+=trow(['Skip',sl,'(excluded from checking)'],mw,{sz:14});
     });
+    allMatches.questionMatches.forEach(function(qm){
+      body+=trow(['Q Match',qm.pptLabel,(qm.bannerLabel||'(any)')+' on sheet '+qm.sheet],mw,{sz:14});
+    });
     body+='</w:tbl>';
+  }
+
+  // ─── INITIAL SCAN ISSUES (Run 1 snapshot) ───
+  // Shows what the tool couldn't handle before user intervention
+  if(run1Snapshot && runHistory.length>1){
+    body+=p('',{after:200});
+    body+=p('Initial Scan Issues (Before Manual Matches)',{sz:26,bold:true,after:80});
+    body+=p('These are all errors, not-found, and skipped items from the first scan before any matches were added. This shows what the tool needs to learn.',{sz:16,after:100,color:'888888'});
+    body+=p('Initial scan: '+run1Snapshot.total+' checks, '+run1Snapshot.matches+' matches, '+run1Snapshot.errors+' errors, '+run1Snapshot.notFound+' not found, '+run1Snapshot.skippedCount+' skipped ('+run1Snapshot.accuracy+'%)',{sz:16,after:60,color:'666666'});
+    
+    // Initial errors table
+    if(run1Snapshot.errors.length>0){
+      body+=p('',{after:60});
+      body+=p('Initial Errors ('+run1Snapshot.errors.length+')',{sz:20,bold:true,after:60});
+      var iew=[900,900,2200,1400,700,700,700,4000];
+      body+=thead(['Slide','Sheet','Label','Column','PPT','Excel','Diff','Debug'],iew);
+      run1Snapshot.errors.forEach(function(r){
+        // Check if this error was later resolved
+        var stillExists=errors.some(function(e){return e.slide===r.slide && e.label===r.label && e.column===r.column});
+        var rowColor=stillExists?'CC4444':'228B22';
+        var resolvedTag=stillExists?'':'  [RESOLVED]';
+        body+=trow([r.slide,r.sheet||'?',r.label,r.column,r.pptValue||'',r.excelValue!=null?String(r.excelValue):'—',r.diff!=null?String(r.diff):'—',(r.debug||'')+resolvedTag],iew,{sz:12,color:rowColor});
+      });
+      body+='</w:tbl>';
+    }
+    
+    // Initial not-found table
+    if(run1Snapshot.notFound.length>0){
+      body+=p('',{after:60});
+      body+=p('Initial Not Found ('+run1Snapshot.notFound.length+')',{sz:20,bold:true,after:60});
+      var inw=[900,900,2200,1400,700,4400];
+      body+=thead(['Slide','Sheet','Label','Column','PPT','Debug'],inw);
+      run1Snapshot.notFound.forEach(function(r){
+        var stillExists=notFoundList.some(function(n){return n.slide===r.slide && n.label===r.label && n.column===r.column});
+        var rowColor=stillExists?'CC4444':'228B22';
+        var resolvedTag=stillExists?'':'  [RESOLVED]';
+        body+=trow([r.slide,r.sheet||'?',r.label,r.column,r.pptValue||'',(r.debug||'')+resolvedTag],inw,{sz:12,color:rowColor});
+      });
+      body+='</w:tbl>';
+    }
+    
+    // Initial not-found traces — shows WHY the tool failed
+    var nfWithTraces=run1Snapshot.notFound.filter(function(r){return r._trace});
+    if(nfWithTraces.length>0){
+      body+=p('',{after:60});
+      body+=p('Initial Not Found — Diagnostic Traces',{sz:20,bold:true,after:60});
+      body+=p('Shows what the tool tried for each not-found item before manual intervention.',{sz:14,after:60,color:'888888'});
+      // Deduplicate by label (same label appears for each column)
+      var seenLabels={};
+      nfWithTraces.forEach(function(r){
+        if(seenLabels[r.label]) return;
+        seenLabels[r.label]=true;
+        var t=r._trace;
+        body+=p('"'+r.label+'" (Slide '+r.slide+')',{sz:16,bold:true,after:30});
+        body+=p('  Debug: '+r.debug,{sz:12,after:20,color:'666666'});
+        if(t.groupHint) body+=p('  Group hint: "'+t.groupHint+'"',{sz:12,after:20,color:'666666'});
+        if(t.sourceSummary && t.sourceSummary.length>0){
+          body+=p('  Label sources found ('+t.sourceSummary.length+'):',{sz:12,after:20,color:'666666'});
+          t.sourceSummary.forEach(function(s){
+            body+=p('    Sheet '+s.sheet+' row '+s.row+' "'+s.label+'" ('+s.method+')',{sz:12,after:10,color:'888888'});
+          });
+        } else {
+          body+=p('  No label sources found in any sheet',{sz:12,after:20,color:'CC4444'});
+        }
+        if(t.candidates && t.candidates.length>0){
+          body+=p('  Candidates ('+t.candidates.length+'):',{sz:12,after:20,color:'666666'});
+          t.candidates.slice(0,10).forEach(function(c){
+            body+=p('    Sheet '+c.sheet+' col '+c.colIdx+' "'+c.colHeader+'" → Excel='+c.excelVal+' diff='+c.diff+' '+c.status,{sz:12,after:10,color:c.status==='MATCH'?'228B22':'888888'});
+          });
+        }
+        if(t.aliasesFired && t.aliasesFired.length>0){
+          body+=p('  Aliases tried: '+t.aliasesFired.join(', '),{sz:12,after:20,color:'4488AA'});
+        }
+        body+=p('',{after:40});
+      });
+    }
+    
+    // Initial skipped summary
+    if(run1Snapshot.skipped.length>0){
+      body+=p('',{after:60});
+      body+=p('Initial Skipped ('+run1Snapshot.skippedCount+')',{sz:20,bold:true,after:60});
+      var isw=[900,2200,4400];
+      body+=thead(['Slide','Label','Reason'],isw);
+      // Deduplicate
+      var seenSkip={};
+      run1Snapshot.skipped.forEach(function(s){
+        var k=s.slide+'|'+s.label+'|'+s.reason;
+        if(seenSkip[k]) return;
+        seenSkip[k]=true;
+        body+=trow([s.slide,s.label,s.reason],isw,{sz:12});
+      });
+      body+='</w:tbl>';
+    }
+    
+    // Summary of what user resolved
+    var resolvedNF=run1Snapshot.notFound.filter(function(r){
+      return !notFoundList.some(function(n){return n.slide===r.slide && n.label===r.label && n.column===r.column});
+    });
+    var resolvedErr=run1Snapshot.errors.filter(function(r){
+      return !errors.some(function(e){return e.slide===r.slide && e.label===r.label && e.column===r.column});
+    });
+    if(resolvedNF.length>0 || resolvedErr.length>0){
+      body+=p('',{after:60});
+      body+=p('Resolution Summary',{sz:20,bold:true,after:60});
+      if(resolvedNF.length>0) body+=p('Resolved '+resolvedNF.length+' not-found items via manual matches',{sz:14,after:20,color:'228B22'});
+      if(resolvedErr.length>0) body+=p('Resolved '+resolvedErr.length+' errors via manual matches',{sz:14,after:20,color:'228B22'});
+      // List unique resolved labels
+      var resolvedLabels={};
+      resolvedNF.forEach(function(r){resolvedLabels[r.label]=true});
+      resolvedErr.forEach(function(r){resolvedLabels[r.label]=true});
+      var rLabels=Object.keys(resolvedLabels);
+      if(rLabels.length>0) body+=p('Labels resolved: '+rLabels.join(', '),{sz:14,after:20,color:'666666'});
+      // Show remaining issues
+      var remainNF=notFoundList.length;
+      var remainErr=errors.length;
+      if(remainNF>0 || remainErr>0){
+        body+=p('Still unresolved: '+remainErr+' errors, '+remainNF+' not found',{sz:14,after:20,color:'CC4444'});
+      } else {
+        body+=p('All initial issues resolved!',{sz:14,after:20,color:'228B22'});
+      }
+    }
   }
 
   // ─── DIAGNOSTICS APPENDIX ───
@@ -2585,5 +3312,6 @@ function exportReport(){
 }
 
 </script>
+
 </body>
 </html>
