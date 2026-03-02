@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -126,7 +125,86 @@ var workbook=null, sheetNames=[], sheetsData={}, sheetQuestionText={}, sheetQues
 var runHistory=[];
 var run1Snapshot=null; // Full capture of initial scan for report
 var workbook2=null, sheetNames2=[], sheetsData2={}, sheetQuestionText2={}, sheetQuestionNum2={}, excelFileName2='';
-var pollingAliases={'supt':'support','sprt':'support','supp':'support','supprt':'support','gov':'governor','govt':'government','cong':'congress','pres':'president','dem':'democrat','rep':'republican','gop':'republican','hc':'health care','hlt':'health','econ':'economy','ed':'education','env':'environment','imm':'immigration','infra':'infrastructure','kids':'child','child':'child','overall':'total','total':'overall','track':'direction','direction':'track','decln':'declining','declining':'decln','fav':'favorable','unfav':'unfavorable','approv':'approve','disapprov':'disapprove','opp':'oppose','miltry':'military','nthing':'nothing','dislke':'dislike','polcy':'policy','incr':'increase','decr':'decrease'};
+var pollingAliases={
+  // Banner abbreviations → full words
+  'supt':'support','sprt':'support','supp':'support','supprt':'support',
+  'opp':'oppose','oppos':'oppose',
+  'fav':'favorable','unfav':'unfavorable',
+  'approv':'approve','disapprov':'disapprove','apprve':'approve','disapprve':'disapprove',
+  'gov':'governor','govt':'government','cong':'congress','pres':'president',
+  'dem':'democrat','rep':'republican','gop':'republican',
+  'hc':'health care','hlt':'health','econ':'economy','ed':'education',
+  'env':'environment','imm':'immigration','infra':'infrastructure',
+  'kids':'child','child':'child',
+  'overall':'total','total':'overall',
+  'track':'direction','direction':'track',
+  'decln':'declining','declining':'decln',
+  'miltry':'military','nthing':'nothing','dislke':'dislike','polcy':'policy',
+  'incr':'increase','decr':'decrease',
+  'strng':'strong','smwht':'somewhat','vry':'very',
+  'cmpltly':'completely','def':'definitely','prob':'probably',
+  'elig':'eligible','inelig':'ineligible',
+  'comm':'community','dist':'district','dept':'department',
+  'avg':'average','approx':'approximately',
+  'yrs':'years','mo':'months','yr':'year',
+  'hh':'household','hhi':'household income',
+  'lib':'liberal','mod':'moderate','cons':'conservative',
+  'reg':'registered','unreg':'unregistered',
+  'gen':'general','prim':'primary',
+  'cand':'candidate','incumb':'incumbent',
+  'prop':'proposition','meas':'measure',
+  'rt':'right','lt':'left',
+  'info':'information','govt':'government'
+};
+
+// Regional DMA / geographic mappings — PPT label → banner column name
+var regionAliases={
+  // Idaho regions
+  'north idaho':'spokane','northern idaho':'spokane','n idaho':'spokane','nid':'spokane',
+  'southwest idaho':'boise','sw idaho':'boise','southwestern idaho':'boise','treasure valley':'boise',
+  'eastern idaho':'idaho falls','east idaho':'idaho falls','e idaho':'idaho falls','eid':'idaho falls',
+  'southeast idaho':'twin falls','se idaho':'twin falls',
+  'central idaho':'boise','c idaho':'boise',
+  'magic valley':'twin falls',
+  // Common DMA abbreviations
+  'boi':'boise','idf':'idaho falls','if':'idaho falls','tf':'twin falls','spok':'spokane',
+  'slc':'salt lake city','pdx':'portland','sea':'seattle','sfo':'san francisco',
+  'lax':'los angeles','nyc':'new york','chi':'chicago','atl':'atlanta',
+  'dfw':'dallas','hou':'houston','phx':'phoenix','den':'denver',
+  'msp':'minneapolis','det':'detroit','mia':'miami','tpa':'tampa',
+  // State abbreviations
+  'id':'idaho','ca':'california','tx':'texas','oh':'ohio','nc':'north carolina',
+  'al':'alabama','in':'indiana','ga':'georgia','az':'arizona'
+};
+
+// Interchangeable label groups — any label in a group matches any other
+var interchangeGroups=[
+  ['dk/refused','dkrefused','dont know/refused','dont knowrefused','not sure','undecided','dont know','no opinion','refused','dk','ns'],
+  ['favorable','fav','favourable'],
+  ['unfavorable','unfav','unfavourable'],
+  ['very favorable','very fav','vry fav'],
+  ['very unfavorable','very unfav','vry unfav'],
+  ['somewhat favorable','smwht fav','somewhat fav'],
+  ['somewhat unfavorable','smwht unfav','somewhat unfav'],
+  ['strongly support','strong support','strng support','strng supp'],
+  ['somewhat support','smwht support','somewhat supp','smwht supp'],
+  ['strongly oppose','strong oppose','strng oppose','strng opp'],
+  ['somewhat oppose','smwht oppose','somewhat opp','smwht opp'],
+  ['strongly agree','strong agree','strng agree'],
+  ['somewhat agree','smwht agree'],
+  ['strongly disagree','strong disagree','strng disagree'],
+  ['somewhat disagree','smwht disagree'],
+  ['right direction','right track','rt direction','rt track'],
+  ['wrong direction','wrong track'],
+  ['much more','a lot more'],
+  ['somewhat more','a little more'],
+  ['about the same','same','no change'],
+  ['net','net dif 1','net dif','net diff'],
+  ['yes definitely','def yes','definitely yes'],
+  ['yes probably','prob yes','probably yes'],
+  ['no probably not','prob no','probably not'],
+  ['no definitely not','def no','definitely not']
+];
 
 function esc(s){var e=document.createElement('span');e.textContent=s;return e.innerHTML}
 function log(msg){var el=document.getElementById('scanLog');el.classList.remove('hidden');el.textContent+=msg+'\n';el.scrollTop=el.scrollHeight}
@@ -495,6 +573,11 @@ function labelsMatch(pptLabel, excelLabel){
 
   var dkSet=['dk/refused','dkrefused','dont know/refused','dont knowrefused','not sure','undecided','dont know'];
   if(dkSet.indexOf(pN)!==-1&&(dkSet.indexOf(eN)!==-1||dkSet.indexOf(eStripped)!==-1)) return true;
+  // Check all interchangeable label groups
+  for(var ig=0;ig<interchangeGroups.length;ig++){
+    var grp=interchangeGroups[ig];
+    if(grp.indexOf(pN)!==-1&&(grp.indexOf(eN)!==-1||grp.indexOf(eStripped)!==-1)) return true;
+  }
 
   var pWords=pN.split(/\s+/), eWords=eStripped.split(/\s+/);
   var pShort=pWords.length<=4, eShort=eWords.length<=4;
@@ -588,6 +671,9 @@ function headerMatch(pptHeader, excelHeader){
   var pN=norm(pptHeader), eN=norm(excelHeader);
   if(!pN||!eN) return false;
   if(pN===eN) return true;
+  // Check regionAliases (e.g. "North Idaho" → "Spokane")
+  if(regionAliases[pN] && norm(regionAliases[pN])===eN) return true;
+  if(regionAliases[eN] && norm(regionAliases[eN])===pN) return true;
   // Expand polling aliases before matching
   var pW=pN.split(/[\s\/]+/).filter(function(w){return w.length>1});
   var eW=eN.split(/[\s\/]+/).filter(function(w){return w.length>1});
@@ -764,9 +850,23 @@ function findExcelColumn(sheetName, pptColHeader, siblingCols, groupHint){
   // Column name aliases: PPT header → banner header variations
   // Universal aliases only — project-specific ones get added via Match Helper
   var colAliases={
-    'und':'not sure','undecided':'not sure',
-    'f':'female','m':'male','gender m':'male','gender f':'female'
+    // Undecided variants
+    'und':'not sure','undecided':'not sure','unsure':'not sure','ns':'not sure',
+    // Gender
+    'f':'female','m':'male','gender m':'male','gender f':'female','men':'male','women':'female',
+    // Party
+    'democrat':'dem','republican':'gop','independent':'indy','indie':'indy',
+    // Support/Oppose abbreviations
+    'support':'supprt','oppose':'oppose','supp':'supprt',
+    // Age ranges
+    '1824':'1824','2534':'2534','3544':'3544','4554':'4554','5564':'5564','65+':'65+',
+    // Vote history
+    '0 of 4':'0 of 4','none':'0 of 4','new reg':'0 of 4',
+    '12 of 4':'12 of 4','1 of 4':'1 of 4','2 of 4':'2 of 4',
+    '34 of 4':'34 of 4','3 of 4':'3 of 4','4 of 4':'4 of 4'
   };
+  // Merge regionAliases into colAliases
+  for(var rk in regionAliases) colAliases[rk]=regionAliases[rk];
   var aliasVal=colAliases[pN];
   // Manual column aliases take priority
   if(userAliases.columns[pN]) aliasVal=userAliases.columns[pN];
@@ -828,8 +928,28 @@ function findExcelColumn(sheetName, pptColHeader, siblingCols, groupHint){
     if(aliasVal){
       var eCombN=norm(combined[ci]||'');
       var eBotN=norm(bottom[ci]||'');
-      if(eCombN.indexOf(aliasVal)!==-1||eBotN.indexOf(aliasVal)!==-1){
-        best=Math.max(best, 85);
+      // User-added column aliases are hard overrides (score 100)
+      var isUserAlias=userAliases.columns[pN]===aliasVal;
+      var aliasScore=isUserAlias?100:85;
+      if(eCombN===aliasVal||eBotN===aliasVal){
+        best=Math.max(best, aliasScore);
+      } else if(eCombN.indexOf(aliasVal)!==-1||eBotN.indexOf(aliasVal)!==-1){
+        best=Math.max(best, aliasScore);
+      } else if(isUserAlias){
+        // For manual overrides, also try fuzzy/headerMatch as fallback
+        // This catches cases where norm() produces slightly different results
+        if(headerMatch(aliasVal, eCombN)||headerMatch(aliasVal, eBotN)){
+          best=Math.max(best, aliasScore);
+        }
+        // Also try word-by-word: "spokne mm" matches "Spokne\nMM"
+        var aliasWords=aliasVal.split(/[\s\/]+/).filter(function(w){return w.length>0});
+        var eBotWords=eBotN.split(/[\s\/]+/).filter(function(w){return w.length>0});
+        var eCombWords=eCombN.split(/[\s\/]+/).filter(function(w){return w.length>0});
+        if(aliasWords.length>0){
+          var allInBot=aliasWords.every(function(aw){return eBotWords.some(function(ew){return wordMatch(aw,ew)})});
+          var allInComb=aliasWords.every(function(aw){return eCombWords.some(function(ew){return wordMatch(aw,ew)})});
+          if(allInBot||allInComb) best=Math.max(best, aliasScore);
+        }
       }
     }
     if(best>bestScore){bestScore=best;bestCol=ci}
@@ -2017,6 +2137,27 @@ function findBestMatch(labelIndex, pptLabel, pptColHeader, pptNum, slideNum, tab
   }
 
   // For interchangeable labels, merge sources from all equivalent keys
+  // Check all interchangeGroups (includes DK/Refused, Net variants, fav/unfav, etc.)
+  for(var igi=0;igi<interchangeGroups.length;igi++){
+    var igrp=interchangeGroups[igi];
+    if(igrp.indexOf(key)!==-1){
+      if(!sources) sources=[];
+      for(var igj=0;igj<igrp.length;igj++){
+        if(igrp[igj]!==key && labelIndex[igrp[igj]]){
+          for(var igk=0;igk<labelIndex[igrp[igj]].length;igk++){
+            var igSrc=labelIndex[igrp[igj]][igk];
+            var isDupe=false;
+            for(var igd=0;igd<sources.length;igd++){
+              if(sources[igd].sheet===igSrc.sheet&&sources[igd].rowIdx===igSrc.rowIdx){isDupe=true;break}
+            }
+            if(!isDupe) sources.push(igSrc);
+          }
+        }
+      }
+      break;
+    }
+  }
+  // Also keep legacy DK equiv for backward compat
   var dkEquiv=['dk/refused','dkrefused','dont know/refused','dont knowrefused','not sure','undecided','dont know'];
   if(dkEquiv.indexOf(key)!==-1){
     if(!sources) sources=[];
@@ -2453,19 +2594,33 @@ var userAliases={labels:{},columns:{},skipLabels:[],unskipLabels:[],questionMatc
 
 function buildDatalistOptions(){
   // Build PPT labels/columns ONLY from problem items (errors, not-found, skipped)
-  var pptLabels={}, pptCols={}, excelLabels={}, excelCols={};
+  var pptLabelSlides={}, pptCols={}, excelLabels={}, excelCols={};
   
-  // PPT labels/columns only from errors and not-found
+  // PPT labels/columns only from errors and not-found — track slide numbers
   results.forEach(function(r){
     if(r.status==='ERROR' || r.status==='NOT FOUND'){
-      if(r.label) pptLabels[r.label]=1;
+      if(r.label){
+        if(!pptLabelSlides[r.label]) pptLabelSlides[r.label]={};
+        if(r.slide) pptLabelSlides[r.label][r.slide]=1;
+      }
       if(r.column) pptCols[r.column]=1;
     }
   });
   // Also from skipped
   skippedItems.forEach(function(s){
-    if(s.label) pptLabels[s.label]=1;
+    if(s.label){
+      if(!pptLabelSlides[s.label]) pptLabelSlides[s.label]={};
+      if(s.slide) pptLabelSlides[s.label][s.slide]=1;
+    }
   });
+  
+  // Build PPT label datalist with slide context: "S2 | Favorable"
+  var pptLabelItems=[];
+  for(var lab in pptLabelSlides){
+    var slides=Object.keys(pptLabelSlides[lab]).sort(function(a,b){return parseInt(a)-parseInt(b)});
+    var slideStr=slides.length>0?'S'+slides.join(','):'';
+    pptLabelItems.push({value:lab, display:slideStr+(slideStr?' | ':'')+lab});
+  }
   
   // Excel labels from labelIndex (all banner row labels)
   // Show as "Q# - label text" for context, but value is just the label
@@ -2476,6 +2631,15 @@ function buildDatalistOptions(){
   sheetNames.forEach(function(sn){
     var data=sheetsData[sn]; if(!data) return;
     var qNum=sheetQuestionNum[sn]||'';
+    var qText=sheetQuestionText[sn]||'';
+    // Build a context prefix: prefer Q number, fall back to short question text or sheet name
+    var prefix=qNum;
+    if(!prefix && qText){
+      // Use first few words of question text as context
+      prefix=qText.substring(0,30).replace(/[.?!]+$/,'').trim();
+      if(qText.length>30) prefix+='...';
+    }
+    if(!prefix) prefix='Sheet '+sn;
     for(var r=0;r<data.length;r++){
       var code=data[r][codeColIdx];
       var cn=(typeof code==='number')?code:parseInt(code,10);
@@ -2483,7 +2647,7 @@ function buildDatalistOptions(){
       var lab=String(data[r][labelColIdx]||'').trim();
       if(lab && !seenLabels[lab]){
         seenLabels[lab]=1;
-        var display=qNum?(qNum+' | '+lab):lab;
+        var display=prefix+' | '+lab;
         excelLabelItems.push({value:lab, display:display});
       }
     }
@@ -2552,7 +2716,7 @@ function buildDatalistOptions(){
     });
   }
   
-  setDatalist('dl_pptLabels', pptLabels);
+  setDatalistPairs('dl_pptLabels', pptLabelItems);
   setDatalist('dl_pptCols', pptCols);
   setDatalistPairs('dl_excelLabels', excelLabelItems);
   setDatalistPairs('dl_excelCols', excelColItems);
@@ -2619,6 +2783,12 @@ function addAlias(type){
 // Strip datalist context prefixes from dropdown selections
 // "Q10 | The reliability of..." → "The reliability of..."
 // "Age > 55+" → "55+"
+function stripPptLabelContext(val){
+  // Strip "S2 | " or "S2,3 | " prefix from PPT label dropdown selections
+  var m=val.match(/^S[\d,]+\s*\|\s*(.+)$/i);
+  if(m) return m[1];
+  return val;
+}
 function stripLabelContext(val){
   // Strip "Q## | " prefix from label dropdown selections
   var m=val.match(/^Q\d+\s*\|\s*(.+)$/i);
@@ -2642,7 +2812,9 @@ function collectAliases(){
     var from=(document.getElementById(id+'_from')||{}).value||'';
     var to=(document.getElementById(id+'_to')||{}).value||'';
     if(!from.trim()) continue;
-    var fromN=norm(from.trim());
+    // Strip slide context from PPT label dropdown: "S2 | Favorable" → "Favorable"
+    var fromClean=stripPptLabelContext(from.trim());
+    var fromN=norm(fromClean);
     if(type==='label' && to.trim()){
       var cleanTo=stripLabelContext(to.trim());
       userAliases.labels[fromN]=norm(cleanTo);
@@ -3312,6 +3484,5 @@ function exportReport(){
 }
 
 </script>
-
 </body>
 </html>
